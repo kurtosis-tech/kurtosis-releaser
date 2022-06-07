@@ -46,7 +46,6 @@ func main() {
 }
 
 func runMain() error {
-	// PHASE 0: Check that you’re in a currently git repository, return error if not
 	currentWorkingDirectory, err := os.Getwd()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
@@ -65,15 +64,11 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while attempting to open the existing git repository.")
 	}
 
-	// // cfg, err := repository.Config()
-	// // fmt.Printf("Worktree: %s", cfg.Core.Worktree)
-
 	_, err = repository.Remote(originRemoteName)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
 	}
 
-	// // PHASE I: Check that local master branch is ready for a release
 	// Check local master branch exists
 	localMasterBranch, err := repository.Branch(masterBranchName)
 	if err != nil {
@@ -97,35 +92,8 @@ func runMain() error {
 	if !isClean {
 		fmt.Printf("The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'\n", currWorktreeStatus)
 		return nil
-		// return stacktrace.Propagate(err, "The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'", currWorktreeStatus)// no error here
 	}
 	fmt.Printf("Is working tree clean?: %t\n", isClean)
-
-	// // Fetch remote origin master
-	// // originRemote, err := repository.Remote(originRemoteName)
-	// // if err != nil {
-	// // 	return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
-	// // }
-
-	// // sshPath := os.Getenv("HOME") + "/.ssh/id_ed25519"
-	// // sshKey, _ := ioutil.ReadFile(sshPath)
-	// // publicKey, keyError := ssh.NewPublicKeys("git", []byte(sshKey), "")
-	// // if keyError != nil {
-	// // 	fmt.Println(keyError)
-	// // }
-	// // fmt.Println("Attempting to fetch origin remote...")
-	// // if err := originRemote.Fetch(&git.FetchOptions{}); err != nil {
-	// // 	return stacktrace.Propagate(err, "An error occurred fetching remote '%v'.", originRemoteName)
-	// // }
-	// // fmt.Println("Fetched origin remote...")
-
-	// // PHASE 2
-	// //       - Check the last time remote master was fetched through `last-fetch-time.txt` in `.git`
-	// //       - If remote master wasn’t fetched recently
-	// //           - git fetch remote master branch
-	// //           - if local master is not synced with remote master
-	// //               - return error if so bc can’t call release on ancient version of master
-	// //           - update `lasttime.txt`
 
 	// Check that local master and remote master are in sync
 	localMasterBranchName := masterBranchName
@@ -148,15 +116,6 @@ func runMain() error {
 		fmt.Println("The local master branch is not in sync with the remote master branch. Must be in sync to conduct release process.")
 		return nil
 	}
-
-	// // PHASE 3
-	// // - Guess the new release version
-	// //   - get latest X.Y.Z version
-	// //       - grab all tags on the branch
-	// //       - filter for only tags with X.Y.Z version format
-	// //       - sort and find latest
-	// //   - look at changelog file to see if it contains `###Breaking Changes`
-	// //   - if yes: new release = X.(Y+1).0 else: X.Y.(Z+1)
 	
 	// Get latest release version
 	latestReleaseVersion, err := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
@@ -170,28 +129,22 @@ func runMain() error {
 
 	// Check that there is the appropriate amount of TBD version headers
 	tbdHeaderCount, err := grepFile(changelogFilepath, TBD_VERSION_HEADER_REGEX)
-	// fmt.Printf("TBD Header Count: %d\n", tbdHeaderCount)
 	if tbdHeaderCount != EXPECTED_NUM_TBD_HEADER_LINES {
 		fmt.Printf("There should be %d TBD header lines in the changelog. Instead there are %d.\n", EXPECTED_NUM_TBD_HEADER_LINES, tbdHeaderCount)
 		return nil
 	}
 
-
 	versionHeaderCount, err := grepFile(changelogFilepath, VERSION_HEADER_REGEX)
-	// fmt.Printf("Version Header Count: %d\n", versionHeaderCount)
 	if versionHeaderCount == 0 {
 		fmt.Println("No previous changelog versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
 		return nil
 	}
 
-	// breakingChangesCount, err := grepFile(changelogFilepath, BREAKING_CHANGES_SUBHEADER_REGEX)
-	// fmt.Printf("Breaking Changes Count: %d\n", breakingChangesCount)
 	existsBreakingChanges, err := detectBreakingChanges(changelogFilepath, TBD_VERSION_HEADER_REGEX, BREAKING_CHANGES_SUBHEADER_REGEX, VERSION_HEADER_REGEX)
 	if err!= nil {
 		return stacktrace.Propagate(err, "Error occured while searching for breaking changes.")
 	}
 
-	fmt.Printf("Exists breaking changes: %t\n", existsBreakingChanges)
 	var nextReleaseVersion semver.Version
 	if existsBreakingChanges {
 		nextReleaseVersion = latestReleaseVersion.IncMinor()
@@ -199,14 +152,10 @@ func runMain() error {
 		nextReleaseVersion = latestReleaseVersion.IncPatch()
 	}
 
-	fmt.Printf("Guessed Next Release Version: %s\n", nextReleaseVersion.String())
-
 	// Prompt user to see if they want to continue with release with new version
 	go wait()
-	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))\n", nextReleaseVersion.String())
+	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))", nextReleaseVersion.String())
 	fmt.Scanln()
-
-	fmt.Println("You made it to the end of the current releaser code!")
 	return nil
 }
 
@@ -232,11 +181,7 @@ func grepFile(file string, regexPat string) (int64, error) {
     defer f.Close()
     scanner := bufio.NewScanner(f)
     for scanner.Scan() {
-        // if bytes.Contains(scanner.Bytes(), pat) {
-        //     patCount++
-        // }
 		if r.Match(scanner.Bytes()) {
-			// fmt.Println(string(scanner.Bytes()))
 			patCount++
 		}
     }
@@ -246,6 +191,9 @@ func grepFile(file string, regexPat string) (int64, error) {
     return patCount, nil
 }
 
+
+// Retrieves latest release version from tags in repo
+// Returns false
 func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (semver.Version, error) {
 	semverRegex, _ := regexp.Compile(SEMVER_REGEX)
 	// should i check for errors here?
@@ -272,10 +220,6 @@ func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (semver
 	})
 	// should i check for errors here?
 
-	// for _, tagSemVer := range tagSemVers {
-	// 	fmt.Println(tagSemVer.String())
-	// }
-
 	var latestReleaseTagSemVer *semver.Version
 	if len(tagSemVers) == 0 {
 		latestReleaseTagSemVer, _ = semver.StrictNewVersion(noPrevVersion)
@@ -288,14 +232,15 @@ func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (semver
 	return *latestReleaseTagSemVer, nil
 }
 
+// Detects if Breaking Changes Header exists in changelog file based on supplied regex patterns
+// If error occurs, returns false, err
+// If not, returns true, nil
 func detectBreakingChanges(changelogFilepath string, tbdRegexString string, breakingChangesRegexString string, versionHeaderRegexString string) (bool, error) {
 	changelogFile, err := os.Open(changelogFilepath);
 	if err != nil {
 		return false, stacktrace.Propagate(err, "Error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
 	defer changelogFile.Close()
-
-	// fmt.Printf("detect breaking changes made it here %d\n", 1)
 
 	tbdRegex, err := regexp.Compile(tbdRegexString)
 	if err != nil {
@@ -310,33 +255,23 @@ func detectBreakingChanges(changelogFilepath string, tbdRegexString string, brea
 		return false, stacktrace.Propagate(err, "Could not parse regexp: '%s'", versionHeaderRegexString)
 	}
 
-	// fmt.Printf("detect breaking changes made it here %d\n", 2)
-
     scanner := bufio.NewScanner(changelogFile)
 
-	// Check for right amount of '# TBD' headers
+	// Find TBD header
     for scanner.Scan() {
 		if tbdRegex.Match(scanner.Bytes()) {
-			// fmt.Println("Found # TBD Header!")
 			break
 		}
     }
 
-	// fmt.Printf("detect breaking changes made it here %d\n", 3)
-
+	// Scan file until next version header detected, detecting breaking changes header along the way
 	foundBreakingChanges := false
 	for scanner.Scan() {
-		// fmt.Println(string(scanner.Bytes()))
-
 		if breakingChangesRegex.Match(scanner.Bytes()){
-			// fmt.Println("Found Breaking Changes Header!")
-			// fmt.Println(string(scanner.Bytes()))
 			foundBreakingChanges = true
 		}
 		
 		if versionHeaderRegex.Match(scanner.Bytes()){
-			// fmt.Println("Found version header!")
-			// fmt.Println(string(scanner.Bytes()))
 			break
 		}
 	}
@@ -344,6 +279,5 @@ func detectBreakingChanges(changelogFilepath string, tbdRegexString string, brea
     if err := scanner.Err(); err != nil {
         fmt.Fprintln(os.Stderr, err)
     }
-	// fmt.Printf("detect breaking changes made it here %d\n", 4)
     return foundBreakingChanges, nil
 }
