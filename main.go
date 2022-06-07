@@ -81,25 +81,25 @@ func runMain() error {
 	}
 	fmt.Printf("Local master branch: %+v\n", localMasterBranch)
 
-	// // Check no staged or unstaged changes exist on the branch before release
-	// worktree, err := repository.Worktree()
-	// if err != nil {
-	// 	return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
-	// }
+	// Check no staged or unstaged changes exist on the branch before release
+	worktree, err := repository.Worktree()
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
+	}
 
-	// currWorktreeStatus, err := worktree.Status()
-	// if err != nil {
-	// 	return stacktrace.Propagate(err, "An error occurred while trying to retrieve the status of the worktree of the repository.")
-	// }
-	// fmt.Printf("Current working tree status: %s\n", currWorktreeStatus)
+	currWorktreeStatus, err := worktree.Status()
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the status of the worktree of the repository.")
+	}
+	fmt.Printf("Current working tree status: %s\n", currWorktreeStatus)
 
-	// isClean := currWorktreeStatus.IsClean()
-	// if !isClean {
-	// 	fmt.Printf("The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'\n", currWorktreeStatus)
-	// 	return nil
-	// 	// return stacktrace.Propagate(err, "The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'", currWorktreeStatus)// no error here
-	// }
-	// fmt.Printf("Is working tree clean?: %t\n", isClean)
+	isClean := currWorktreeStatus.IsClean()
+	if !isClean {
+		fmt.Printf("The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'\n", currWorktreeStatus)
+		return nil
+		// return stacktrace.Propagate(err, "The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'", currWorktreeStatus)// no error here
+	}
+	fmt.Printf("Is working tree clean?: %t\n", isClean)
 
 	// // Fetch remote origin master
 	// // originRemote, err := repository.Remote(originRemoteName)
@@ -127,27 +127,27 @@ func runMain() error {
 	// //               - return error if so bc can’t call release on ancient version of master
 	// //           - update `lasttime.txt`
 
-	// // Check that local master and remote master are in sync
-	// localMasterBranchName := masterBranchName
-	// remoteMasterBranchName := fmt.Sprintf("%v/%v", originRemoteName, masterBranchName)
+	// Check that local master and remote master are in sync
+	localMasterBranchName := masterBranchName
+	remoteMasterBranchName := fmt.Sprintf("%v/%v", originRemoteName, masterBranchName)
 
-	// localMasterHash, err := repository.ResolveRevision(plumbing.Revision(localMasterBranchName))
-	// if err != nil {
-	// 	return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMasterBranchName)
-	// }
-	// remoteMasterHash, err := repository.ResolveRevision(plumbing.Revision(remoteMasterBranchName))
-	// if err != nil {
-	// 	return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", remoteMasterBranchName)
-	// }
+	localMasterHash, err := repository.ResolveRevision(plumbing.Revision(localMasterBranchName))
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMasterBranchName)
+	}
+	remoteMasterHash, err := repository.ResolveRevision(plumbing.Revision(remoteMasterBranchName))
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", remoteMasterBranchName)
+	}
 
-	// fmt.Println(localMasterHash.String())
-	// fmt.Println(remoteMasterHash.String())
-	// isLocalMasterInSyncWithRemoteMaster := localMasterHash.String() == remoteMasterHash.String()
-	// fmt.Printf("Remote Master == Local Master?: %t\n", isLocalMasterInSyncWithRemoteMaster)
-	// if !isLocalMasterInSyncWithRemoteMaster {
-	// 	fmt.Println("The local master branch is not in sync with the remote master branch. Must be in sync to conduct release process.")
-	// 	return nil
-	// }
+	fmt.Println(localMasterHash.String())
+	fmt.Println(remoteMasterHash.String())
+	isLocalMasterInSyncWithRemoteMaster := localMasterHash.String() == remoteMasterHash.String()
+	fmt.Printf("Remote Master == Local Master?: %t\n", isLocalMasterInSyncWithRemoteMaster)
+	if !isLocalMasterInSyncWithRemoteMaster {
+		fmt.Println("The local master branch is not in sync with the remote master branch. Must be in sync to conduct release process.")
+		return nil
+	}
 
 	// // PHASE 3
 	// // - Guess the new release version
