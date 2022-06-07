@@ -33,7 +33,7 @@ const (
 	EXPECTED_NUM_TBD_HEADER_LINES = 1
 	VERSION_HEADER_REGEX = "^#[[:space:]]*[0-9]+.[0-9]+.[0-9]+[[:space:]]*$"
 	BREAKING_CHANGES_SUBHEADER_REGEX = "^###*[[:space:]]*[Bb]reak.*$"
-	NEXT_VERSION_IF_NO_PREVIOUS_VERSION = "0.1.0" 
+	NO_PREVIOUS_VERSION = "0.0.0" 
 )
 
 func main() {
@@ -150,65 +150,31 @@ func runMain() error {
 
 	// // PHASE 3
 	// // - Guess the new release version
-	// //   - get current X.Y.Z version
+	// //   - get latest X.Y.Z version
 	// //       - grab all tags on the branch
 	// //       - filter for only tags with X.Y.Z version format
 	// //       - sort and find latest
 	// //   - look at changelog file to see if it contains `###Breaking Changes` header
 	// //   - if yes: new release = X.(Y+1).0 else: X.Y.(Z+1)
 	
-	// // Grab all tags on the branch
-	tagrefs, err := repository.Tags()
-
-	semverRegex, err := regexp.Compile(SEMVER_REGEX)
+	// Get latest release version
+	latestReleaseVersion, err := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
 	if err != nil {
-		return stacktrace.Propagate(err, "Could not parse regexp: '%s'", SEMVER_REGEX)
+		return stacktrace.Propagate(err, "An error occurred while attempting to get the latest release version.")
 	}
-
-	// Filter for only tags with X.Y.Z version format
-	var tagSemVers []*semver.Version
-	err = tagrefs.ForEach(func(tagref *plumbing.Reference) error {
-		tagName := tagref.Name().String()
-		tagName = strings.ReplaceAll(tagName, tagsPrefix, "")
-		if !semverRegex.Match([]byte(tagName)) {
-			return nil
-		}
-		tagSemVer, err := semver.StrictNewVersion(tagName)
-		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred while attempting to parse semantic version of tag '%s'.", tagName)
-		}
-		tagSemVers = append(tagSemVers, tagSemVer) 
-		return nil
-	})
-	for _, tagSemVer := range tagSemVers {
-		fmt.Println(tagSemVer.String())
-	}
-
-	noPrevVersion := false
-	var latestReleaseTagSemVer *semver.Version
-	if len(tagSemVers) == 0 {
-		latestReleaseTagSemVer, err = semver.StrictNewVersion(NEXT_VERSION_IF_NO_PREVIOUS_VERSION)
-		noPrevVersion = true
-	} else {
-		// Sort 
-		sort.Sort(sort.Reverse(semver.Collection(tagSemVers)))
-
-		// Retrieve latest tag
-		latestReleaseTagSemVer = tagSemVers[0]
-	}
-
-	fmt.Println(latestReleaseTagSemVer)
+	fmt.Println(latestReleaseVersion)
 
 	// Look at changelog file to see if it contains `###Breaking Changes` header
 	changelogFilepath := path.Join(currentWorkingDirectory, relativeChangelogFilepath)
 
-	// Check that there is the appropriate TBD version header amount
+	// Check that there is the appropriate amount of TBD version headers
 	tbdHeaderCount, err := grepFile(changelogFilepath, TBD_VERSION_HEADER_REGEX)
 	// fmt.Printf("TBD Header Count: %d\n", tbdHeaderCount)
 	if tbdHeaderCount != EXPECTED_NUM_TBD_HEADER_LINES {
 		fmt.Printf("There should be %d TBD header lines in the changelog. Instead there are %d.\n", EXPECTED_NUM_TBD_HEADER_LINES, tbdHeaderCount)
 		return nil
 	}
+
 
 	versionHeaderCount, err := grepFile(changelogFilepath, VERSION_HEADER_REGEX)
 	// fmt.Printf("Version Header Count: %d\n", versionHeaderCount)
@@ -219,26 +185,20 @@ func runMain() error {
 
 	// breakingChangesCount, err := grepFile(changelogFilepath, BREAKING_CHANGES_SUBHEADER_REGEX)
 	// fmt.Printf("Breaking Changes Count: %d\n", breakingChangesCount)
-
-
 	existsBreakingChanges, err := detectBreakingChanges(changelogFilepath, TBD_VERSION_HEADER_REGEX, BREAKING_CHANGES_SUBHEADER_REGEX, VERSION_HEADER_REGEX)
 	if err!= nil {
 		return stacktrace.Propagate(err, "Error occured while searching for breaking changes.")
 	}
 
 	fmt.Printf("Exists breaking changes: %t\n", existsBreakingChanges)
-	var nextReleaseTagSemVer semver.Version
-	if !noPrevVersion {
-		if existsBreakingChanges {
-			nextReleaseTagSemVer = (*latestReleaseTagSemVer).IncMinor()
-		} else {
-			nextReleaseTagSemVer = (*latestReleaseTagSemVer).IncPatch()
-		}
+	var nextReleaseVersion semver.Version
+	if existsBreakingChanges {
+		nextReleaseVersion = latestReleaseVersion.IncMinor()
 	} else {
-		nextReleaseTagSemVer = *latestReleaseTagSemVer
+		nextReleaseVersion = latestReleaseVersion.IncPatch()
 	}
 
-	fmt.Printf("Guessed Next Release Version: %s\n", nextReleaseTagSemVer.String())
+	fmt.Printf("Guessed Next Release Version: %s\n", nextReleaseVersion.String())
 
 	fmt.Println("You made it to the end of the current releaser code!")
 	return nil
@@ -270,6 +230,48 @@ func grepFile(file string, regexPat string) (int64, error) {
         fmt.Fprintln(os.Stderr, err)
     }
     return patCount, nil
+}
+
+func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (semver.Version, error) {
+	semverRegex, _ := regexp.Compile(SEMVER_REGEX)
+	// should i check for errors here?
+
+	// Grab all tags on the branch
+	tagrefs, _ := repo.Tags()
+	// should i check for errors here?
+
+	// Trim and filter for only tags with X.Y.Z version format
+	var tagSemVers []*semver.Version
+	tagrefs.ForEach(func(tagref *plumbing.Reference) error {
+		tagName := tagref.Name().String()
+		tagName = strings.ReplaceAll(tagName, tagsPrefix, "")
+		if !semverRegex.Match([]byte(tagName)) {
+			return nil
+		}
+		tagSemVer, err := semver.StrictNewVersion(tagName)
+		if err != nil {
+			return err
+		}
+		// should there be a check here?
+		tagSemVers = append(tagSemVers, tagSemVer) 
+		return nil
+	})
+	// should i check for errors here?
+
+	// for _, tagSemVer := range tagSemVers {
+	// 	fmt.Println(tagSemVer.String())
+	// }
+
+	var latestReleaseTagSemVer *semver.Version
+	if len(tagSemVers) == 0 {
+		latestReleaseTagSemVer, _ = semver.StrictNewVersion(noPrevVersion)
+		// should there be a check here?
+	} else {
+		sort.Sort(sort.Reverse(semver.Collection(tagSemVers)))
+		latestReleaseTagSemVer = tagSemVers[0]
+	}
+
+	return *latestReleaseTagSemVer, nil
 }
 
 func detectBreakingChanges(changelogFilepath string, tbdRegexString string, breakingChangesRegexString string, versionHeaderRegexString string) (bool, error) {
