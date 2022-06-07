@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"regexp"
+	"time"
 
 
 	"github.com/Masterminds/semver/v3"
@@ -154,7 +155,7 @@ func runMain() error {
 	// //       - grab all tags on the branch
 	// //       - filter for only tags with X.Y.Z version format
 	// //       - sort and find latest
-	// //   - look at changelog file to see if it contains `###Breaking Changes` header
+	// //   - look at changelog file to see if it contains `###Breaking Changes`
 	// //   - if yes: new release = X.(Y+1).0 else: X.Y.(Z+1)
 	
 	// Get latest release version
@@ -200,8 +201,21 @@ func runMain() error {
 
 	fmt.Printf("Guessed Next Release Version: %s\n", nextReleaseVersion.String())
 
+	// Prompt user to see if they want to continue with release with new version
+	go wait()
+	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))\n", nextReleaseVersion.String())
+	fmt.Scanln()
+
 	fmt.Println("You made it to the end of the current releaser code!")
 	return nil
+}
+
+func wait() {
+    i := 0
+    for {
+        time.Sleep(time.Second * 1)
+        i++
+    }
 }
 
 // adapted from: https://stackoverflow.com/questions/26709971/could-this-be-more-efficient-in-go
