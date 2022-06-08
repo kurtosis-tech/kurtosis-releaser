@@ -27,7 +27,6 @@ const (
 	relChangelogFilepath = "/docs/changelog.md"
 
 	// Taken from guess-release-version.sh
-	HEADER_CHAR = "#"
 	SEMVER_REGEX = "^[0-9]+.[0-9]+.[0-9]$"
 	TBD_VERSION_HEADER_REGEX = "^#[[:space:]]*TBD[[:space:]]*$"
 	EXPECTED_NUM_TBD_HEADER_LINES = 1
@@ -138,39 +137,8 @@ func runMain() error {
 	go wait()
 	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))", nextReleaseVersion.String())
 	fmt.Scanln()
+
 	return nil
-}
-
-func wait() {
-    i := 0
-    for {
-        time.Sleep(time.Second * 1)
-        i++
-    }
-}
-
-// adapted from: https://stackoverflow.com/questions/26709971/could-this-be-more-efficient-in-go
-func grepFile(file string, regexPat string) int64 {
-	r, err := regexp.Compile(regexPat)
-	if err != nil {
-		logrus.Errorf("Could not parse regexp: '%s'", regexPat, err)
-	}
-    patCount := int64(0)
-    f, err := os.Open(file)
-    if err != nil {
-		logrus.Errorf("An error occurred while attempting to open file", err)
-    }
-    defer f.Close()
-    scanner := bufio.NewScanner(f)
-    for scanner.Scan() {
-		if r.Match(scanner.Bytes()) {
-			patCount++
-		}
-    }
-    if err := scanner.Err(); err != nil {
-        logrus.Errorf("An error occurred while scanning file.\n%v", err)
-    }
-    return patCount
 }
 
 func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) semver.Version {
@@ -259,4 +227,36 @@ func detectBreakingChanges(changelogFilepath string) bool {
         logrus.Errorf("An error occurred while scanning file.\n", err)
     }
     return foundBreakingChanges
+}
+
+// adapted from: https://stackoverflow.com/questions/26709971/could-this-be-more-efficient-in-go
+func grepFile(file string, regexPat string) int64 {
+	r, err := regexp.Compile(regexPat)
+	if err != nil {
+		logrus.Errorf("Could not parse regexp: '%s'", regexPat, err)
+	}
+    patCount := int64(0)
+    f, err := os.Open(file)
+    if err != nil {
+		logrus.Errorf("An error occurred while attempting to open file", err)
+    }
+    defer f.Close()
+    scanner := bufio.NewScanner(f)
+    for scanner.Scan() {
+		if r.Match(scanner.Bytes()) {
+			patCount++
+		}
+    }
+    if err := scanner.Err(); err != nil {
+        logrus.Errorf("An error occurred while scanning file.\n%v", err)
+    }
+    return patCount
+}
+
+func wait() {
+    i := 0
+    for {
+        time.Sleep(time.Second * 1)
+        i++
+    }
 }
