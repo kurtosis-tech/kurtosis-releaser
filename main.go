@@ -21,6 +21,7 @@ import (
 
 const (
 	gitDirname = ".git"
+	gitUsername = "git"
 	originRemoteName = "origin"
 	masterBranchName = "master"
 	emptyPassword = ""
@@ -98,7 +99,7 @@ func runMain() error {
 	}
 
 	// Fetch remote
-	publicKeys, err := ssh.NewPublicKeysFromFile("git", privateKeyFilepath, emptyPassword)
+	publicKeys, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating fetch to origin master")
 	}
