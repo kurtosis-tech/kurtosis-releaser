@@ -17,6 +17,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 )
@@ -67,12 +68,12 @@ func runMain() error {
 	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting private key file.")
 	}
-
+	fmt.Println("Starting release process...")
 	currentWorkingDirectory, err := os.Getwd()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
 	}
-
+	fmt.Println("Retrieving git information...")
 	gitDirpath := path.Join(currentWorkingDirectory, gitDirname)
 	if _, err := os.Stat(gitDirpath); err != nil {
 		if os.IsNotExist(err) {
@@ -90,6 +91,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
 	}
 
+	fmt.Println("Conducting pre release checks...")
 	// Check local master branch exists
 	localMasterBranch, err := repository.Branch(masterBranchName)
 	if err != nil {
@@ -113,6 +115,7 @@ func runMain() error {
 		return nil
 	}
 
+	fmt.Println("Fetching remote if needed...")
 	// Fetch remote if needed
 	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
 	shouldFetch := determineShouldFetch(lastFetchedFilepath)
@@ -132,6 +135,7 @@ func runMain() error {
 		}
 	}
 
+	fmt.Println("Checking that remote and master are in sync...")
 	// Check that local master and remote master are in sync
 	localMasterBranchName := masterBranchName
 	remoteMasterBranchName := fmt.Sprintf("%v/%v", originRemoteName, masterBranchName)
@@ -151,6 +155,7 @@ func runMain() error {
 		return nil
 	}
 	
+	fmt.Println("Guessing the next release version...")
 	// Guess the next release version
 	latestReleaseVersion := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
 
@@ -179,12 +184,33 @@ func runMain() error {
 	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))", nextReleaseVersion.String())
 	fmt.Scanln()
 
+	fmt.Println("Running pre release scripts...")
 	// Run pre release scripts
 	preReleaseScriptsDirpath := path.Join(currentWorkingDirectory, relScriptsDirpath)
 	err = runPreReleaseScripts(preReleaseScriptsDirpath, nextReleaseVersion)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
 	}
+
+	// Update changelog
+
+	// Committing
+	err = worktree.AddWithOptions(&git.AddOptions{All: true})
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while attempting to add release changes to staging area.")
+	}
+	commitMsg := fmt.Sprintf("Finalize changes for release version '%s'", nextReleaseVersion.String())
+	commit, err := worktree.Commit(commitMsg, &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Tewodros",
+			Email: "Mitiku",
+			When:  time.Now(),
+		},
+	})
+
+	obj, err := repository.CommitObject(commit)
+	fmt.Println(obj)
+
 
 	return nil
 }
@@ -308,7 +334,6 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion semver
 	scanner := bufio.NewScanner(preReleaseScriptsFile)
 	var scripts []string
 	for scanner.Scan() {
-		fmt.Println(scanner.Text())
 		scripts = append(scripts, scanner.Text())
 	}
 	for _, script := range scripts {
