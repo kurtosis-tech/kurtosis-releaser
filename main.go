@@ -29,19 +29,19 @@ const (
 	originRemoteName = "origin"
 	masterBranchName = "master"
 	emptyPassword = ""
-	tagsPrefix = "refs/tags/"
+
 	preReleaseScriptsFilename = ".pre-release-scripts.txt"
 	relScriptsDirpath = "scripts"
+
+	tagsPrefix = "refs/tags/"
 	tagRefSpec = "refs/tags/*:refs/tags/*"
 
 	// The name of the file inside the Git directory which will store when we last fetched (in Unix seconds)
 	lastFetchedFilename = "last-fetch.txt"
-
 	lastFetchedTimestampUintParseBase = 10
 	lastFetchedTimestampUintParseBits = 64
-	
 	// How long we'll allow the user to go between fetches to ensure the repo is updated when they're releasing
-	fetchGracePeriod = 30 * time.Second
+	fetchGracePeriod = 10 * time.Minute
 	extraNanosecondsToAddToLastFetchedTimestamp = 0
 	lastFetchedFileMode = 0644
 
