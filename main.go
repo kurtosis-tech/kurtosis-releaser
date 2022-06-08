@@ -14,15 +14,17 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	gitDirname       = ".git"
+	gitDirname = ".git"
 	originRemoteName = "origin"
 	masterBranchName = "master"
-	tagsPrefix       = "refs/tags/"
+	emptyPassword = ""
+	tagsPrefix = "refs/tags/"
 
 	relChangelogFilepath = "/docs/changelog.md"
 
@@ -44,6 +46,12 @@ func main() {
 }
 
 func runMain() error {
+	checkArgs("<private key filepath>")
+	privateKeyFilepath := os.Args[1]
+	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
+		return stacktrace.Propagate(err, "An error occurred getting private key file.")
+	}
+
 	currentWorkingDirectory, err := os.Getwd()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
@@ -61,7 +69,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while attempting to open the existing git repository.")
 	}
 
-	_, err = repository.Remote(originRemoteName)
+	originRemote, err := repository.Remote(originRemoteName)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
 	}
@@ -88,6 +96,15 @@ func runMain() error {
 		fmt.Printf("The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'\n", currWorktreeStatus)
 		return nil
 	}
+
+	// Fetch remote
+	publicKeys, err := ssh.NewPublicKeysFromFile("git", privateKeyFilepath, emptyPassword)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating fetch to origin master")
+	}
+	err = originRemote.Fetch(&git.FetchOptions{
+		Auth:     publicKeys,
+	})
 
 	// Check that local master and remote master are in sync
 	localMasterBranchName := masterBranchName
@@ -251,6 +268,13 @@ func grepFile(file string, regexPat string) int64 {
         logrus.Errorf("An error occurred while scanning file.\n%v", err)
     }
     return patCount
+}
+
+func checkArgs(arg ...string){
+	if len(os.Args) < len(arg)+1 {
+		fmt.Printf("Usage: %s %s", os.Args[0], strings.Join(arg, " "))
+		os.Exit(1)
+	}
 }
 
 func wait() {
