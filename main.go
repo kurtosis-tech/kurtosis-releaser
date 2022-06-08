@@ -196,10 +196,13 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
 	}
 
-	// Update changelog
+	fmt.Println("Updating locally...")
 
-	// Committing
+	// Update changelog
+	err = updateChangelog(changelogFilepath)
+
 	fmt.Println("Committing changes locally...")
+	// Commit pre release changes
 	err = worktree.AddWithOptions(&git.AddOptions{All: true})
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to add release changes to staging area.")
@@ -216,8 +219,8 @@ func runMain() error {
 	obj, err := repository.CommitObject(commit)
 	fmt.Println(obj)
 
-	// Set next release version tag
 	fmt.Println("Setting next release version tag locally...")
+	// Set next release version tag
 	head, err := repository.Head()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to get the ref to HEAD of the local repository.")
@@ -229,16 +232,16 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
 	}
 
-	// Push local changes to origin master
 	fmt.Println("Pushing release changes to master...")
+	// Push local changes to origin master
 	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
 	err = repository.Push(pushCommitOpts)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release changes to origin remote.")
 	}
 
-	// Push tag to master
 	fmt.Println("Pushing release tag to master...")
+	// Push tag to master
 	pushTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
 		RemoteName: originRemoteName,
@@ -249,7 +252,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while pushing release tag to origin remote.")
 	}
 
-	fmt.Println("Release success...")
+	fmt.Println("Release success.")
 	return nil
 }
 
@@ -383,6 +386,10 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion semver
 			return err
 		}
 	}
+	return nil
+}
+
+func updateChangelog(changelogFilepath string) error {
 	return nil
 }
 
