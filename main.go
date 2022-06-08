@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"log"
 	"path"
 	"sort"
 	"strings"
@@ -25,7 +24,7 @@ const (
 	masterBranchName = "master"
 	tagsPrefix       = "refs/tags/"
 
-	relativeChangelogFilepath = "/docs/changelog.md"
+	relChangelogFilepath = "/docs/changelog.md"
 
 	// Taken from guess-release-version.sh
 	HEADER_CHAR = "#"
@@ -50,7 +49,6 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
 	}
-	fmt.Printf("Current working directory: %s\n", currentWorkingDirectory)
 
 	gitRepositoryDirectory := path.Join(currentWorkingDirectory, gitDirname)
 	if _, err := os.Stat(gitRepositoryDirectory); err != nil {
@@ -72,9 +70,8 @@ func runMain() error {
 	// Check local master branch exists
 	localMasterBranch, err := repository.Branch(masterBranchName)
 	if err != nil {
-		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", masterBranchName, masterBranchName)
+		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v' Returned %+v.", masterBranchName, masterBranchName, localMasterBranch)
 	}
-	fmt.Printf("Local master branch: %+v\n", localMasterBranch)
 
 	// Check no staged or unstaged changes exist on the branch before release
 	worktree, err := repository.Worktree()
@@ -86,14 +83,12 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the status of the worktree of the repository.")
 	}
-	fmt.Printf("Current working tree status: %s\n", currWorktreeStatus)
 
 	isClean := currWorktreeStatus.IsClean()
 	if !isClean {
 		fmt.Printf("The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'\n", currWorktreeStatus)
 		return nil
 	}
-	fmt.Printf("Is working tree clean?: %t\n", isClean)
 
 	// Check that local master and remote master are in sync
 	localMasterBranchName := masterBranchName
@@ -108,43 +103,31 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", remoteMasterBranchName)
 	}
 
-	fmt.Println(localMasterHash.String())
-	fmt.Println(remoteMasterHash.String())
 	isLocalMasterInSyncWithRemoteMaster := localMasterHash.String() == remoteMasterHash.String()
-	fmt.Printf("Remote Master == Local Master?: %t\n", isLocalMasterInSyncWithRemoteMaster)
 	if !isLocalMasterInSyncWithRemoteMaster {
 		fmt.Println("The local master branch is not in sync with the remote master branch. Must be in sync to conduct release process.")
 		return nil
 	}
 	
-	// Get latest release version
-	latestReleaseVersion, err := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while attempting to get the latest release version.")
-	}
-	fmt.Println(latestReleaseVersion)
+	// Guess the next release version
+	latestReleaseVersion := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
 
-	// Look at changelog file to see if it contains `###Breaking Changes` header
-	changelogFilepath := path.Join(currentWorkingDirectory, relativeChangelogFilepath)
+	// Conduct changelog file validation
+	changelogFilepath := path.Join(currentWorkingDirectory, relChangelogFilepath)
 
-	// Check that there is the appropriate amount of TBD version headers
-	tbdHeaderCount, err := grepFile(changelogFilepath, TBD_VERSION_HEADER_REGEX)
+	tbdHeaderCount := grepFile(changelogFilepath, TBD_VERSION_HEADER_REGEX)
 	if tbdHeaderCount != EXPECTED_NUM_TBD_HEADER_LINES {
 		fmt.Printf("There should be %d TBD header lines in the changelog. Instead there are %d.\n", EXPECTED_NUM_TBD_HEADER_LINES, tbdHeaderCount)
 		return nil
 	}
 
-	versionHeaderCount, err := grepFile(changelogFilepath, VERSION_HEADER_REGEX)
+	versionHeaderCount := grepFile(changelogFilepath, VERSION_HEADER_REGEX)
 	if versionHeaderCount == 0 {
 		fmt.Println("No previous changelog versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
 		return nil
 	}
 
-	existsBreakingChanges, err := detectBreakingChanges(changelogFilepath, TBD_VERSION_HEADER_REGEX, BREAKING_CHANGES_SUBHEADER_REGEX, VERSION_HEADER_REGEX)
-	if err!= nil {
-		return stacktrace.Propagate(err, "Error occured while searching for breaking changes.")
-	}
-
+	existsBreakingChanges := detectBreakingChanges(changelogFilepath)
 	var nextReleaseVersion semver.Version
 	if existsBreakingChanges {
 		nextReleaseVersion = latestReleaseVersion.IncMinor()
@@ -152,7 +135,6 @@ func runMain() error {
 		nextReleaseVersion = latestReleaseVersion.IncPatch()
 	}
 
-	// Prompt user to see if they want to continue with release with new version
 	go wait()
 	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))", nextReleaseVersion.String())
 	fmt.Scanln()
@@ -168,15 +150,15 @@ func wait() {
 }
 
 // adapted from: https://stackoverflow.com/questions/26709971/could-this-be-more-efficient-in-go
-func grepFile(file string, regexPat string) (int64, error) {
+func grepFile(file string, regexPat string) int64 {
 	r, err := regexp.Compile(regexPat)
 	if err != nil {
-		return 0, stacktrace.Propagate(err, "Could not parse regexp: '%s'", regexPat)
+		logrus.Errorf("Could not parse regexp: '%s'", regexPat, err)
 	}
     patCount := int64(0)
     f, err := os.Open(file)
     if err != nil {
-        log.Fatal(err)
+		logrus.Errorf("An error occurred while attempting to open file", err)
     }
     defer f.Close()
     scanner := bufio.NewScanner(f)
@@ -186,73 +168,70 @@ func grepFile(file string, regexPat string) (int64, error) {
 		}
     }
     if err := scanner.Err(); err != nil {
-        fmt.Fprintln(os.Stderr, err)
+        logrus.Errorf("An error occurred while scanning file.\n%v", err)
     }
-    return patCount, nil
+    return patCount
 }
 
+func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) semver.Version {
+	semverRegex, err := regexp.Compile(SEMVER_REGEX)
+	if err != nil {
+		logrus.Errorf("Could not parse regexp: '%s'", SEMVER_REGEX, err)
+	}
 
-// Retrieves latest release version from tags in repo
-// Returns false
-func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (semver.Version, error) {
-	semverRegex, _ := regexp.Compile(SEMVER_REGEX)
-	// should i check for errors here?
+	tagrefs, err := repo.Tags()
+	if err != nil {
+		logrus.Errorf("An error occurred while retrieving tags for repository", err)
+	}
 
-	// Grab all tags on the branch
-	tagrefs, _ := repo.Tags()
-	// should i check for errors here?
-
-	// Trim and filter for only tags with X.Y.Z version format
+	// Trim tagrefs and filter for only tags with X.Y.Z version format
 	var tagSemVers []*semver.Version
 	tagrefs.ForEach(func(tagref *plumbing.Reference) error {
 		tagName := tagref.Name().String()
 		tagName = strings.ReplaceAll(tagName, tagsPrefix, "")
-		if !semverRegex.Match([]byte(tagName)) {
-			return nil
+
+		if semverRegex.Match([]byte(tagName)) {
+			tagSemVer, err := semver.StrictNewVersion(tagName)
+			if err != nil {
+				logrus.Errorf("An error occurred while converting tags to semantic version.", err)
+			}
+			tagSemVers = append(tagSemVers, tagSemVer) 
 		}
-		tagSemVer, err := semver.StrictNewVersion(tagName)
-		if err != nil {
-			return err
-		}
-		// should there be a check here?
-		tagSemVers = append(tagSemVers, tagSemVer) 
 		return nil
 	})
-	// should i check for errors here?
 
 	var latestReleaseTagSemVer *semver.Version
 	if len(tagSemVers) == 0 {
-		latestReleaseTagSemVer, _ = semver.StrictNewVersion(noPrevVersion)
-		// should there be a check here?
+		latestReleaseTagSemVer, err = semver.StrictNewVersion(NO_PREVIOUS_VERSION)
+		if err != nil {
+			logrus.Errorf("An error occurred while converting tags to semantic version.", err)
+		}
 	} else {
 		sort.Sort(sort.Reverse(semver.Collection(tagSemVers)))
 		latestReleaseTagSemVer = tagSemVers[0]
 	}
 
-	return *latestReleaseTagSemVer, nil
+	return *latestReleaseTagSemVer
 }
 
-// Detects if Breaking Changes Header exists in changelog file based on supplied regex patterns
-// If error occurs, returns false, err
-// If not, returns true, nil
-func detectBreakingChanges(changelogFilepath string, tbdRegexString string, breakingChangesRegexString string, versionHeaderRegexString string) (bool, error) {
+func detectBreakingChanges(changelogFilepath string) bool {
 	changelogFile, err := os.Open(changelogFilepath);
 	if err != nil {
-		return false, stacktrace.Propagate(err, "Error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
+		logrus.Errorf("Error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath, err)
 	}
 	defer changelogFile.Close()
 
-	tbdRegex, err := regexp.Compile(tbdRegexString)
+	tbdRegex, err := regexp.Compile(TBD_VERSION_HEADER_REGEX)
 	if err != nil {
-		return false, stacktrace.Propagate(err, "Could not parse regexp: '%s'", tbdRegexString)
+		logrus.Errorf("Could not parse regexp: '%s'", TBD_VERSION_HEADER_REGEX, err)
 	}
-	breakingChangesRegex, err := regexp.Compile(breakingChangesRegexString)
+	breakingChangesRegex, err := regexp.Compile(BREAKING_CHANGES_SUBHEADER_REGEX)
 	if err != nil {
-		return false, stacktrace.Propagate(err, "Could not parse regexp: '%s'", breakingChangesRegexString)
+		logrus.Errorf("Could not parse regexp: '%s'", BREAKING_CHANGES_SUBHEADER_REGEX, err)
 	}
-	versionHeaderRegex, err := regexp.Compile(versionHeaderRegexString)
+	versionHeaderRegex, err := regexp.Compile(VERSION_HEADER_REGEX)
 	if err != nil {
-		return false, stacktrace.Propagate(err, "Could not parse regexp: '%s'", versionHeaderRegexString)
+		logrus.Errorf("Could not parse regexp: '%s'", VERSION_HEADER_REGEX, err)
 	}
 
     scanner := bufio.NewScanner(changelogFile)
@@ -264,7 +243,7 @@ func detectBreakingChanges(changelogFilepath string, tbdRegexString string, brea
 		}
     }
 
-	// Scan file until next version header detected, detecting breaking changes header along the way
+	// Scan file until next version header detected, searching for Breaking Changes header along the way
 	foundBreakingChanges := false
 	for scanner.Scan() {
 		if breakingChangesRegex.Match(scanner.Bytes()){
@@ -277,7 +256,7 @@ func detectBreakingChanges(changelogFilepath string, tbdRegexString string, brea
 	}
 
     if err := scanner.Err(); err != nil {
-        fmt.Fprintln(os.Stderr, err)
+        logrus.Errorf("An error occurred while scanning file.\n", err)
     }
-    return foundBreakingChanges, nil
+    return foundBreakingChanges
 }
