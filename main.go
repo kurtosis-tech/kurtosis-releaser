@@ -101,18 +101,20 @@ func runMain() error {
 	}
 
 	fmt.Println("Conducting pre release checks...")
-	// Check local master branch exists
-	localMasterBranch, err := repository.Branch(masterBranchName)
-	if err != nil {
-		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v' Returned %+v.", masterBranchName, masterBranchName, localMasterBranch)
-	}
-
-	// Check no staged or unstaged changes exist on the branch before release
+	// Conduct prerelease checks
 	worktree, err := repository.Worktree()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
 	}
 
+	// Check local master branch exists
+	fmt.Println("Checking out master branch...")
+	err = worktree.Checkout(&git.CheckoutOptions{Branch: "refs/heads/master"})
+	if err != nil {
+		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", masterBranchName, masterBranchName)
+	}
+
+	// Check no staged or unstaged changes exist on the branch before release
 	currWorktreeStatus, err := worktree.Status()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the status of the worktree of the repository.")
@@ -210,8 +212,8 @@ func runMain() error {
 	commitMsg := fmt.Sprintf("Finalize changes for release version '%s'", nextReleaseVersion.String())
 	commit, err := worktree.Commit(commitMsg, &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "Tewodros",
-			Email: "Mitiku",
+			// Name:  "Tewodros",
+			// Email: "Mitiku",
 			When:  time.Now(),
 		},
 	})
