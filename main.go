@@ -32,6 +32,7 @@ const (
 	tagsPrefix = "refs/tags/"
 	preReleaseScriptsFilename = ".pre-release-scripts.txt"
 	relScriptsDirpath = "scripts"
+	tagRefSpec = "refs/tags/*:refs/tags/*"
 
 	// The name of the file inside the Git directory which will store when we last fetched (in Unix seconds)
 	lastFetchedFilename = "last-fetch.txt"
@@ -241,7 +242,7 @@ func runMain() error {
 	pushTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
 		RemoteName: originRemoteName,
-		RefSpecs:   []config.RefSpec{config.RefSpec("refs/tags/*:refs/tags/*")},
+		RefSpecs:   []config.RefSpec{config.RefSpec(tagRefSpec)},
 	}
 	err = repository.Push(pushTagOpts)
 	if err != nil {
