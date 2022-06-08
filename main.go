@@ -248,6 +248,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while pushing release tag to origin remote.")
 	}
 
+	fmt.Println("Release success...")
 	return nil
 }
 
