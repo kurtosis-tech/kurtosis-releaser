@@ -15,6 +15,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -127,8 +128,8 @@ func runMain() error {
 	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
 	shouldFetch := determineShouldFetch(lastFetchedFilepath)
 	if shouldFetch {
-		fetchOptions := &git.FetchOptions{Auth: gitAuth, RemoteName: originRemoteName}
-		if err := originRemote.Fetch(fetchOptions); err != nil && err != git.NoErrAlreadyUpToDate {
+		fetchOpts := &git.FetchOptions{Auth: gitAuth, RemoteName: originRemoteName}
+		if err := originRemote.Fetch(fetchOpts); err != nil && err != git.NoErrAlreadyUpToDate {
 			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
 		currentUnixTimeStr := fmt.Sprint(time.Now().Unix())
@@ -228,14 +229,25 @@ func runMain() error {
 	}
 
 	// Push local changes to origin master
-	fmt.Println("Pushing changes to master...")
-	pushCommitOptions := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
-	err = repository.Push(pushCommitOptions)
+	fmt.Println("Pushing release changes to master...")
+	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
+	err = repository.Push(pushCommitOpts)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing local changes to origin remote.")
+		return stacktrace.Propagate(err, "An error occurred while pushing release changes to origin remote.")
 	}
 
 	// Push tag to master
+	fmt.Println("Pushing release tag to master...")
+	pushTagOpts := &git.PushOptions{
+		Auth:       gitAuth,
+		RemoteName: originRemoteName,
+		RefSpecs:   []config.RefSpec{config.RefSpec("refs/tags/*:refs/tags/*")},
+	}
+	err = repository.Push(pushTagOpts)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while pushing release tag to origin remote.")
+	}
+
 	return nil
 }
 
