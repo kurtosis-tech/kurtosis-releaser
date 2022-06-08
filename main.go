@@ -9,6 +9,7 @@ import (
 	"strings"
 	"regexp"
 	"time"
+	"strconv"
 
 
 	"github.com/Masterminds/semver/v3"
@@ -115,16 +116,16 @@ func runMain() error {
 	if shouldFetch {
 		publicKeys, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
 		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred generating public key for authenticating fetch to origin master")
+			return stacktrace.Propagate(err, "An error occurred generating public key for authenticating fetch to origin master.")
 		}
 
-		if err := originRemote.Fetch(&git.FetchOptions{Auth: publicKeys}); err != nil {
-			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository")
+		if err := originRemote.Fetch(&git.FetchOptions{Auth: publicKeys}); err != git.NoErrAlreadyUpToDate {
+			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
 		
 		currentUnixTimeStr := fmt.Sprint(time.Now().Unix())
-		if err := ioutil.WriteFile(lastFetchedFilepath, []byte(currentUnixTimeStr), lastFetchedFileMode); err != nil {
-			return stacktrace.Propagate(err, "An error occurred writing last-fetched timestamp '%v' to file '%v'", currentUnixTimeStr, lastFetchedFilepath)
+		if err := os.WriteFile(lastFetchedFilepath, []byte(currentUnixTimeStr), lastFetchedFileMode); err != nil {
+			return stacktrace.Propagate(err, "An error occurred writing last-fetched timestamp '%v' to file '%v'.", currentUnixTimeStr, lastFetchedFilepath)
 		}
 	}
 
@@ -152,13 +153,11 @@ func runMain() error {
 
 	// Conduct changelog file validation
 	changelogFilepath := path.Join(currentWorkingDirectory, relChangelogFilepath)
-
 	tbdHeaderCount := grepFile(changelogFilepath, TBD_VERSION_HEADER_REGEX)
 	if tbdHeaderCount != EXPECTED_NUM_TBD_HEADER_LINES {
 		fmt.Printf("There should be %d TBD header lines in the changelog. Instead there are %d.\n", EXPECTED_NUM_TBD_HEADER_LINES, tbdHeaderCount)
 		return nil
 	}
-
 	versionHeaderCount := grepFile(changelogFilepath, VERSION_HEADER_REGEX)
 	if versionHeaderCount == 0 {
 		fmt.Println("No previous changelog versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
@@ -181,7 +180,7 @@ func runMain() error {
 }
 
 func determineShouldFetch(lastFetchedFilepath string) bool {
-	lastFetchedUnixTimeStr, err := ioutil.ReadFile(lastFetchedFilepath)
+	lastFetchedUnixTimeStr, err := os.ReadFile(lastFetchedFilepath)
 	if err != nil {
 		return true
 	}
