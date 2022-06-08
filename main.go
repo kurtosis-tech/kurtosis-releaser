@@ -125,7 +125,7 @@ func runMain() error {
 			return stacktrace.Propagate(err, "An error occurred generating public key for authenticating fetch to origin master.")
 		}
 
-		if err := originRemote.Fetch(&git.FetchOptions{Auth: publicKeys}); err != git.NoErrAlreadyUpToDate {
+		if err := originRemote.Fetch(&git.FetchOptions{Auth: publicKeys}); err != nil && err != git.NoErrAlreadyUpToDate {
 			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
 		
@@ -195,6 +195,7 @@ func runMain() error {
 	// Update changelog
 
 	// Committing
+	fmt.Println("Committing changes locally...")
 	err = worktree.AddWithOptions(&git.AddOptions{All: true})
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to add release changes to staging area.")
@@ -211,6 +212,18 @@ func runMain() error {
 	obj, err := repository.CommitObject(commit)
 	fmt.Println(obj)
 
+	// Set next release version tag
+	fmt.Println("Setting next release version tag locally...")
+	head, err := repository.Head()
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while attempting to get the ref to HEAD of the local repository.")
+	}
+	_, err = repository.CreateTag(nextReleaseVersion.String(), head.Hash(), &git.CreateTagOptions{
+		Message: nextReleaseVersion.String(),
+	})
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
+	}
 
 	return nil
 }
