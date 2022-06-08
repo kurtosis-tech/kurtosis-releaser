@@ -27,6 +27,17 @@ const (
 	emptyPassword = ""
 	tagsPrefix = "refs/tags/"
 
+	// The name of the file inside the Git directory which will store when we last fetched (in Unix seconds)
+	lastFetchedFilename = "last-fetch.txt"
+
+	lastFetchedTimestampUintParseBase = 10
+	lastFetchedTimestampUintParseBits = 64
+	
+	// How long we'll allow the user to go between fetches to ensure the repo is updated when they're releasing
+	fetchGracePeriod = 30 * time.Second
+	extraNanosecondsToAddToLastFetchedTimestamp = 0
+	lastFetchedFileMode = 0644
+
 	relChangelogFilepath = "/docs/changelog.md"
 
 	// Taken from guess-release-version.sh
@@ -58,8 +69,8 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
 	}
 
-	gitRepositoryDirectory := path.Join(currentWorkingDirectory, gitDirname)
-	if _, err := os.Stat(gitRepositoryDirectory); err != nil {
+	gitDirpath := path.Join(currentWorkingDirectory, gitDirname)
+	if _, err := os.Stat(gitDirpath); err != nil {
 		if os.IsNotExist(err) {
 			return stacktrace.Propagate(err, "An error occurred getting the git repository in this directory. This means that this binary is not being run from root of a git repository.")
 		}
@@ -98,14 +109,24 @@ func runMain() error {
 		return nil
 	}
 
-	// Fetch remote
-	publicKeys, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating fetch to origin master")
+	// Fetch remote if needed
+	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
+	shouldFetch := determineShouldFetch(lastFetchedFilepath)
+	if shouldFetch {
+		publicKeys, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
+		if err != nil {
+			return stacktrace.Propagate(err, "An error occurred generating public key for authenticating fetch to origin master")
+		}
+
+		if err := originRemote.Fetch(&git.FetchOptions{Auth: publicKeys}); err != nil {
+			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository")
+		}
+		
+		currentUnixTimeStr := fmt.Sprint(time.Now().Unix())
+		if err := ioutil.WriteFile(lastFetchedFilepath, []byte(currentUnixTimeStr), lastFetchedFileMode); err != nil {
+			return stacktrace.Propagate(err, "An error occurred writing last-fetched timestamp '%v' to file '%v'", currentUnixTimeStr, lastFetchedFilepath)
+		}
 	}
-	err = originRemote.Fetch(&git.FetchOptions{
-		Auth:     publicKeys,
-	})
 
 	// Check that local master and remote master are in sync
 	localMasterBranchName := masterBranchName
@@ -157,6 +178,26 @@ func runMain() error {
 	fmt.Scanln()
 
 	return nil
+}
+
+func determineShouldFetch(lastFetchedFilepath string) bool {
+	lastFetchedUnixTimeStr, err := ioutil.ReadFile(lastFetchedFilepath)
+	if err != nil {
+		return true
+	}
+
+	lastFetchedUnixTime, err := strconv.ParseUint(
+		string(lastFetchedUnixTimeStr),
+		lastFetchedTimestampUintParseBase,
+		lastFetchedTimestampUintParseBits,
+	)
+	if err != nil {
+		logrus.Errorf("An error occurred parsing last-fetch Unix time string '%v':\n%v", err)
+	}
+	lastFetchedTime := time.Unix(int64(lastFetchedUnixTime), extraNanosecondsToAddToLastFetchedTimestamp)
+	noFetchNeededBefore := lastFetchedTime.Add(fetchGracePeriod)
+
+	return time.Now().After(noFetchNeededBefore)
 }
 
 func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) semver.Version {
