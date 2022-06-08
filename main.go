@@ -64,10 +64,17 @@ func main() {
 
 func runMain() error {
 	checkArgs("<private key filepath>")
+
+	fmt.Println("Setting up git auth for release...")
 	privateKeyFilepath := os.Args[1]
 	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting private key file.")
 	}
+	gitAuth, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating git opreations.")
+	}
+
 	fmt.Println("Starting release process...")
 	currentWorkingDirectory, err := os.Getwd()
 	if err != nil {
@@ -120,15 +127,9 @@ func runMain() error {
 	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
 	shouldFetch := determineShouldFetch(lastFetchedFilepath)
 	if shouldFetch {
-		publicKeys, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
-		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred generating public key for authenticating fetch to origin master.")
-		}
-
-		if err := originRemote.Fetch(&git.FetchOptions{Auth: publicKeys}); err != nil && err != git.NoErrAlreadyUpToDate {
+		if err := originRemote.Fetch(&git.FetchOptions{Auth: gitAuth}); err != nil && err != git.NoErrAlreadyUpToDate {
 			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
-		
 		currentUnixTimeStr := fmt.Sprint(time.Now().Unix())
 		if err := os.WriteFile(lastFetchedFilepath, []byte(currentUnixTimeStr), lastFetchedFileMode); err != nil {
 			return stacktrace.Propagate(err, "An error occurred writing last-fetched timestamp '%v' to file '%v'.", currentUnixTimeStr, lastFetchedFilepath)
@@ -225,6 +226,11 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
 	}
 
+	// Push local changes to origin master
+
+
+
+	// Push tag to master
 	return nil
 }
 
