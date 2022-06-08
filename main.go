@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path"
 	"sort"
 	"strings"
@@ -27,6 +28,8 @@ const (
 	masterBranchName = "master"
 	emptyPassword = ""
 	tagsPrefix = "refs/tags/"
+	preReleaseScriptsFilename = ".pre-release-scripts.txt"
+	relScriptsDirpath = "scripts"
 
 	// The name of the file inside the Git directory which will store when we last fetched (in Unix seconds)
 	lastFetchedFilename = "last-fetch.txt"
@@ -176,6 +179,13 @@ func runMain() error {
 	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))", nextReleaseVersion.String())
 	fmt.Scanln()
 
+	// Run pre release scripts
+	preReleaseScriptsDirpath := path.Join(currentWorkingDirectory, relScriptsDirpath)
+	err = runPreReleaseScripts(preReleaseScriptsDirpath, nextReleaseVersion)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
+	}
+
 	return nil
 }
 
@@ -285,6 +295,31 @@ func detectBreakingChanges(changelogFilepath string) bool {
         logrus.Errorf("An error occurred while scanning file.\n", err)
     }
     return foundBreakingChanges
+}
+
+func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion semver.Version) error {
+	preReleaseScriptsFilepath := path.Join(preReleaseScriptsDirpath, preReleaseScriptsFilename)
+	preReleaseScriptsFile, err := os.Open(preReleaseScriptsFilepath);
+	if err != nil {
+		logrus.Errorf("An error occurred attempting to open file at provided path. Are you sure '%s' exists?", preReleaseScriptsFilepath, err)
+		return err
+	}
+	defer preReleaseScriptsFile.Close()
+	scanner := bufio.NewScanner(preReleaseScriptsFile)
+	var scripts []string
+	for scanner.Scan() {
+		append(scripts, scanner.Text())
+	}
+	for _, script := range scripts {
+		scriptCmdString := path.Join(preReleaseScriptsDirpath, script)
+		scriptCmd := exec.Command(scriptCmd, releaseVersion)
+		err := scriptCmd.Run()
+		if err != nil {
+			logrus.Errorf("An error occurred attempting to run the following pre release script command: '%s'", scriptCmdString, err)
+			return err
+		}
+	}
+	return nil
 }
 
 // adapted from: https://stackoverflow.com/questions/26709971/could-this-be-more-efficient-in-go
