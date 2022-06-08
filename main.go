@@ -127,7 +127,8 @@ func runMain() error {
 	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
 	shouldFetch := determineShouldFetch(lastFetchedFilepath)
 	if shouldFetch {
-		if err := originRemote.Fetch(&git.FetchOptions{Auth: gitAuth}); err != nil && err != git.NoErrAlreadyUpToDate {
+		fetchOptions := &git.FetchOptions{Auth: gitAuth, RemoteName: originRemoteName}
+		if err := originRemote.Fetch(fetchOptions); err != nil && err != git.NoErrAlreadyUpToDate {
 			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
 		currentUnixTimeStr := fmt.Sprint(time.Now().Unix())
@@ -227,8 +228,12 @@ func runMain() error {
 	}
 
 	// Push local changes to origin master
-
-
+	fmt.Println("Pushing changes to master...")
+	pushCommitOptions := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
+	err = repository.Push(pushCommitOptions)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while pushing local changes to origin remote.")
+	}
 
 	// Push tag to master
 	return nil
