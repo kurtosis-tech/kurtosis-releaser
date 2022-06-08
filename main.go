@@ -308,11 +308,12 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion semver
 	scanner := bufio.NewScanner(preReleaseScriptsFile)
 	var scripts []string
 	for scanner.Scan() {
-		append(scripts, scanner.Text())
+		fmt.Println(scanner.Text())
+		scripts = append(scripts, scanner.Text())
 	}
 	for _, script := range scripts {
 		scriptCmdString := path.Join(preReleaseScriptsDirpath, script)
-		scriptCmd := exec.Command(scriptCmd, releaseVersion)
+		scriptCmd := exec.Command(scriptCmdString, releaseVersion.String())
 		err := scriptCmd.Run()
 		if err != nil {
 			logrus.Errorf("An error occurred attempting to run the following pre release script command: '%s'", scriptCmdString, err)
