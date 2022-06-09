@@ -65,10 +65,10 @@ func main() {
 }
 
 func runMain() error {
-	checkArgs("<private key filepath>")
+	checkArgs("<private key filepath>", "<name>", "<email>")
+	privateKeyFilepath, name, email  := os.Args[1], os.Args[2], os.Args[3]
 
 	fmt.Println("Setting up git auth for release...")
-	privateKeyFilepath := os.Args[1]
 	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting private key file.")
 	}
@@ -191,9 +191,17 @@ func runMain() error {
 	fmt.Scanln()
 
 	fmt.Println("Running pre release scripts...")
+
+	undoChanges := true
+	defer func() {
+		if undoChanges {
+			// git reset --hard origin/master
+		}
+	}()
+
 	// Run pre release scripts
 	preReleaseScriptsDirpath := path.Join(currentWorkingDirectory, relScriptsDirpath)
-	err = runPreReleaseScripts(preReleaseScriptsDirpath, nextReleaseVersion)
+	err = runPreReleaseScripts(preReleaseScriptsDirpath, nextReleaseVersion.String())
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
 	}
@@ -201,7 +209,7 @@ func runMain() error {
 	fmt.Println("Updating locally...")
 
 	// Update changelog
-	err = updateChangelog(changelogFilepath)
+	err = updateChangelog(changelogFilepath, nextReleaseVersion.String())
 
 	fmt.Println("Committing changes locally...")
 	// Commit pre release changes
@@ -210,16 +218,20 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while attempting to add release changes to staging area.")
 	}
 	commitMsg := fmt.Sprintf("Finalize changes for release version '%s'", nextReleaseVersion.String())
-	commit, err := worktree.Commit(commitMsg, &git.CommitOptions{
+	_, err = worktree.Commit(commitMsg, &git.CommitOptions{
 		Author: &object.Signature{
-			// Name:  "Tewodros",
-			// Email: "Mitiku",
+			Name:  name,
+			Email: email,
 			When:  time.Now(),
 		},
 	})
 
-	obj, err := repository.CommitObject(commit)
-	fmt.Println(obj)
+	undoReleaseTag := true
+	defer func() {
+		if undoReleaseTag {
+			// get rid of release tag
+		}
+	}()
 
 	fmt.Println("Setting next release version tag locally...")
 	// Set next release version tag
@@ -242,6 +254,13 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while pushing release changes to origin remote.")
 	}
 
+	undoPushToMaster := true
+	defer func() {
+		if undoPushToMaster {
+			// provide remediation instructions to undo the push to master
+		}
+	}()
+
 	fmt.Println("Pushing release tag to master...")
 	// Push tag to master
 	pushTagOpts := &git.PushOptions{
@@ -255,6 +274,10 @@ func runMain() error {
 	}
 
 	fmt.Println("Release success.")
+
+	undoChanges = false
+	undoReleaseTag = false
+	undoPushToMaster = false
 	return nil
 }
 
@@ -366,7 +389,7 @@ func detectBreakingChanges(changelogFilepath string) bool {
     return foundBreakingChanges
 }
 
-func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion semver.Version) error {
+func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string) error {
 	preReleaseScriptsFilepath := path.Join(preReleaseScriptsDirpath, preReleaseScriptsFilename)
 	preReleaseScriptsFile, err := os.Open(preReleaseScriptsFilepath);
 	if err != nil {
@@ -381,7 +404,7 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion semver
 	}
 	for _, script := range scripts {
 		scriptCmdString := path.Join(preReleaseScriptsDirpath, script)
-		scriptCmd := exec.Command(scriptCmdString, releaseVersion.String())
+		scriptCmd := exec.Command(scriptCmdString, releaseVersion)
 		err := scriptCmd.Run()
 		if err != nil {
 			logrus.Errorf("An error occurred attempting to run the following pre release script command: '%s'", scriptCmdString, err)
@@ -391,7 +414,7 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion semver
 	return nil
 }
 
-func updateChangelog(changelogFilepath string) error {
+func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	return nil
 }
 
