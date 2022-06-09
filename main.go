@@ -196,6 +196,12 @@ func runMain() error {
 	defer func() {
 		if undoChanges {
 			// git reset --hard origin/master
+			originMaster := fmt.Sprintf("%s/%s", originRemoteName, masterBranchName)
+			originMasterCommitHash, err := repository.ResolveRevision(plumbing.Revision(originMaster))
+			err = worktree.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: *originMasterCommitHash })
+			if err != nil {
+				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo local changes made for release '%s'. Please run 'git reset --hard origin/master' to undo manually.", nextReleaseVersion.String(), err)
+			}
 		}
 	}()
 
@@ -229,6 +235,7 @@ func runMain() error {
 	undoReleaseTag := true
 	defer func() {
 		if undoReleaseTag {
+			// git tag -d
 			err = repository.DeleteTag(nextReleaseVersion.String())
 			if err != nil {
 				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", nextReleaseVersion.String(), err)
