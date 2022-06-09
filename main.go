@@ -68,7 +68,6 @@ func runMain() error {
 	checkArgs("<private key filepath>", "<name>", "<email>")
 	privateKeyFilepath, name, email  := os.Args[1], os.Args[2], os.Args[3]
 
-	fmt.Println("Setting up git auth for release...")
 	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting private key file.")
 	}
@@ -77,12 +76,10 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating git opreations.")
 	}
 
-	fmt.Println("Starting release process...")
 	currentWorkingDirectory, err := os.Getwd()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
 	}
-	fmt.Println("Retrieving git information...")
 	gitDirpath := path.Join(currentWorkingDirectory, gitDirname)
 	if _, err := os.Stat(gitDirpath); err != nil {
 		if os.IsNotExist(err) {
@@ -100,7 +97,6 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
 	}
 
-	fmt.Println("Conducting pre release checks...")
 	// Conduct prerelease checks
 	worktree, err := repository.Worktree()
 	if err != nil {
@@ -108,7 +104,6 @@ func runMain() error {
 	}
 
 	// Check local master branch exists
-	fmt.Println("Checking out master branch...")
 	err = worktree.Checkout(&git.CheckoutOptions{Branch: "refs/heads/master"})
 	if err != nil {
 		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", masterBranchName, masterBranchName)
@@ -126,7 +121,6 @@ func runMain() error {
 		return nil
 	}
 
-	fmt.Println("Fetching remote if needed...")
 	// Fetch remote if needed
 	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
 	shouldFetch := determineShouldFetch(lastFetchedFilepath)
@@ -141,7 +135,6 @@ func runMain() error {
 		}
 	}
 
-	fmt.Println("Checking that remote and master are in sync...")
 	// Check that local master and remote master are in sync
 	localMasterBranchName := masterBranchName
 	remoteMasterBranchName := fmt.Sprintf("%v/%v", originRemoteName, masterBranchName)
@@ -161,7 +154,6 @@ func runMain() error {
 		return nil
 	}
 	
-	fmt.Println("Guessing the next release version...")
 	// Guess the next release version
 	latestReleaseVersion := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
 
@@ -190,8 +182,6 @@ func runMain() error {
 	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))", nextReleaseVersion.String())
 	fmt.Scanln()
 
-	fmt.Println("Running pre release scripts...")
-
 	undoChanges := true
 	defer func() {
 		if undoChanges {
@@ -212,12 +202,12 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
 	}
 
-	fmt.Println("Updating changelog...")
-
 	// Update changelog
 	err = updateChangelog(changelogFilepath, nextReleaseVersion.String())
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while attempting to update the changelog.")
+	}
 
-	fmt.Println("Committing changes locally...")
 	// Commit pre release changes
 	err = worktree.AddWithOptions(&git.AddOptions{All: true})
 	if err != nil {
@@ -243,7 +233,6 @@ func runMain() error {
 		}
 	}()
 
-	fmt.Println("Setting next release version tag locally...")
 	// Set next release version tag
 	head, err := repository.Head()
 	if err != nil {
@@ -256,7 +245,6 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
 	}
 
-	fmt.Println("Pushing release changes to master...")
 	// Push local changes to origin master
 	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
 	err = repository.Push(pushCommitOpts)
@@ -271,7 +259,6 @@ func runMain() error {
 		}
 	}()
 
-	fmt.Println("Pushing release tag to master...")
 	// Push tag to master
 	pushTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
@@ -282,8 +269,6 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release tag to origin remote.")
 	}
-
-	fmt.Println("Release success.")
 
 	undoChanges = false
 	undoReleaseTag = false
