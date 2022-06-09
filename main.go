@@ -103,14 +103,12 @@ func runMain() error {
 	}
 
 	fmt.Println("Conducting pre release checks...")
-	// Conduct prerelease checks
 	worktree, err := repository.Worktree()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
 	}
 
 	fmt.Println("Checking out master branch...")
-	// Check local master branch exists
 	err = worktree.Checkout(&git.CheckoutOptions{Branch: "refs/heads/master"})
 	if err != nil {
 		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", masterBranchName, masterBranchName)
@@ -166,7 +164,6 @@ func runMain() error {
 	fmt.Println("Finished prererelease checks.")
 	
 	fmt.Println("Guessing next release version...")
-	// Guess the next release version
 	latestReleaseVersion := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
 
 	// Conduct changelog file validation
@@ -207,7 +204,6 @@ func runMain() error {
 	}()
 
 	fmt.Println("Running prerelease scripts...")
-	// Run pre release scripts
 	preReleaseScriptsDirpath := path.Join(currentWorkingDirectory, relScriptsDirpath)
 	err = runPreReleaseScripts(preReleaseScriptsDirpath, nextReleaseVersion.String())
 	if err != nil {
@@ -215,7 +211,6 @@ func runMain() error {
 	}
 
 	fmt.Println("Updating the changelog...")
-	// Update changelog
 	err = updateChangelog(changelogFilepath, nextReleaseVersion.String())
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while updating the changelog.")
@@ -261,7 +256,6 @@ func runMain() error {
 	}
 
 	fmt.Println("Pushing release changes to master...")
-	// Push local changes to origin master
 	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
 	err = repository.Push(pushCommitOpts)
 	if err != nil {
@@ -276,7 +270,6 @@ func runMain() error {
 	}()
 
 	fmt.Println("Pushing release tag to master...")
-	// Push tag to master
 	pushTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
 		RemoteName: originRemoteName,
@@ -446,7 +439,7 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 			break
 		}	
 	}
-	// Add a new TBD head for next release
+	// Add a new TBD header for next release
 	newLines:= make([][]byte, len(lines) + 1) 
 	newLines[0] = []byte("# TBD")
 	for i, _ := range newLines {
