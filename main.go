@@ -438,26 +438,21 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	if err != nil {
 		logrus.Errorf("Could not parse regexp: '%s'", TBD_VERSION_HEADER_REGEX, err)
 	}
-
 	lines := bytes.Split(clFile, []byte("\n"))
+	newLines:= make([][]byte, len(lines) + 1) 
+	// Add a new TBD head for next release
+	newLines[0] = []byte("# TBD")
 	for i, line := range lines {
 		// Change current TBD header to Release Version header
 		if tbdRegex.Match(line){
 			releaseVersionHeader := fmt.Sprintf("# %s", releaseVersion)
-			lines[i] = []byte(releaseVersionHeader)
-			break
-		}	
-	}
-	// Add a new TBD header for next release
-	newLines:= make([][]byte, len(lines) + 1) 
-	newLines[0] = []byte("# TBD")
-	for i, _ := range newLines {
-		if i == 0 {
+			newLines[i + 1] = []byte(releaseVersionHeader)
+		}
+		if i == 0|| i == len(newLines) - 1{
 			continue
 		}
-		newLines[i] = lines[i - 1]
+		newLines[i + 1] = line
 	}
-	
 	newCLFile := bytes.Join(newLines, []byte("\n"))
 	err = os.WriteFile(changelogFilepath, newCLFile, 0644)
 	if err != nil {
