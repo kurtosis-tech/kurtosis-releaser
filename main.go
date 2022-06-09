@@ -231,13 +231,20 @@ func runMain() error {
 		},
 	})
 
+	releaseTag := nextReleaseVersion.String()
+	vReleaseTag := fmt.Sprintf("v.%s", nextReleaseVersion.String())
+
 	undoReleaseTag := true
 	defer func() {
 		if undoReleaseTag {
 			// git tag -d
-			err = repository.DeleteTag(nextReleaseVersion.String())
+			err = repository.DeleteTag(releaseTag)
+			if err!= nil {
+				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", releaseTag, err)
+			}
+			err = repository.DeleteTag(vReleaseTag)
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", nextReleaseVersion.String(), err)
+				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, err)
 			}
 		}
 	}()
@@ -248,8 +255,14 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to get the ref to HEAD of the local repository.")
 	}
-	_, err = repository.CreateTag(nextReleaseVersion.String(), head.Hash(), &git.CreateTagOptions{
-		Message: nextReleaseVersion.String(),
+	_, err = repository.CreateTag(releaseTag, head.Hash(), &git.CreateTagOptions{
+		Message: releaseTag,
+	})
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
+	}
+	_, err = repository.CreateTag(vReleaseTag, head.Hash(), &git.CreateTagOptions{
+		Message: vReleaseTag,
 	})
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
@@ -277,7 +290,7 @@ func runMain() error {
 	}
 	err = repository.Push(pushTagOpts)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release tag to origin remote.")
+		return stacktrace.Propagate(err, "An error occurred while pushing release tags to origin remote.")
 	}
 
 	undoChanges = false
@@ -317,7 +330,6 @@ func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) semver.
 	if err != nil {
 		logrus.Errorf("An error occurred while retrieving tags for repository", err)
 	}
-
 	// Trim tagrefs and filter for only tags with X.Y.Z version format
 	var tagSemVers []*semver.Version
 	tagrefs.ForEach(func(tagref *plumbing.Reference) error {
@@ -354,7 +366,6 @@ func detectBreakingChanges(changelogFilepath string) bool {
 		logrus.Errorf("Error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath, err)
 	}
 	defer changelogFile.Close()
-
 	tbdRegex, err := regexp.Compile(TBD_VERSION_HEADER_REGEX)
 	if err != nil {
 		logrus.Errorf("Could not parse regexp: '%s'", TBD_VERSION_HEADER_REGEX, err)
@@ -369,14 +380,12 @@ func detectBreakingChanges(changelogFilepath string) bool {
 	}
 
     scanner := bufio.NewScanner(changelogFile)
-
 	// Find TBD header
     for scanner.Scan() {
 		if tbdRegex.Match(scanner.Bytes()) {
 			break
 		}
     }
-
 	// Scan file until next version header detected, searching for Breaking Changes header along the way
 	foundBreakingChanges := false
 	for scanner.Scan() {
