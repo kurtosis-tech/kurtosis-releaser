@@ -206,7 +206,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
 	}
 
-	fmt.Println("Updating locally...")
+	fmt.Println("Updating changelog...")
 
 	// Update changelog
 	err = updateChangelog(changelogFilepath, nextReleaseVersion.String())
@@ -229,7 +229,10 @@ func runMain() error {
 	undoReleaseTag := true
 	defer func() {
 		if undoReleaseTag {
-			// get rid of release tag
+			err = repository.DeleteTag(nextReleaseVersion.String())
+			if err != nil {
+				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", nextReleaseVersion.String(), err)
+			}
 		}
 	}()
 
