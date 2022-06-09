@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -198,10 +199,13 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
 	}
 
-	fmt.Println("Updating locally...")
+	fmt.Println("Updating changelog...")
 
 	// Update changelog
-	err = updateChangelog(changelogFilepath)
+	err = updateChangelog(changelogFilepath, nextReleaseVersion.String())
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while updating the changelog.")
+	}
 
 	fmt.Println("Committing changes locally...")
 	// Commit pre release changes
@@ -391,7 +395,40 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion semver
 	return nil
 }
 
-func updateChangelog(changelogFilepath string) error {
+func updateChangelog(changelogFilepath string, releaseVersion string) error {
+	clFile, err := os.ReadFile(changelogFilepath)
+	if err != nil {
+		logrus.Errorf("Error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath, err)
+	}
+	tbdRegex, err := regexp.Compile(TBD_VERSION_HEADER_REGEX)
+	if err != nil {
+		logrus.Errorf("Could not parse regexp: '%s'", TBD_VERSION_HEADER_REGEX, err)
+	}
+
+	lines := bytes.Split(clFile, []byte("\n"))
+	for i, line := range lines {
+		// Change current TBD header to Release Version header
+		if tbdRegex.Match(line){
+			releaseVersionHeader := fmt.Sprintf("# %s", releaseVersion)
+			lines[i] = []byte(releaseVersionHeader)
+			break
+		}	
+	}
+	// Add a new TBD head for next release
+	newLines:= make([][]byte, len(lines) + 1) 
+	newLines[0] = []byte("# TBD")
+	for i, _ := range newLines {
+		if i == 0 {
+			continue
+		}
+		newLines[i] = lines[i - 1]
+	}
+	
+	newCLFile := bytes.Join(newLines, []byte("\n"))
+	err = os.WriteFile(changelogFilepath, newCLFile, 0644)
+	if err != nil {
+		logrus.Errorf("Error attempting to write changelog file to '%s'.", changelogFilepath, err)
+	}
 	return nil
 }
 
