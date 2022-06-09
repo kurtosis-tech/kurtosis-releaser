@@ -260,7 +260,7 @@ func runMain() error {
 	undoPushToMaster := true
 	defer func() {
 		if undoPushToMaster {
-			// provide remediation instructions to undo the push to master
+			logrus.Errorf("ACTION REQUIRED: Error occurred pushing tag '%s' to master. Must undo the push to origin master manually. Follow this tutorial: 'LINK TO INSTRUCTIONS TO UNDO PUSH.'", nextReleaseVersion.String(), err)
 		}
 	}()
 
