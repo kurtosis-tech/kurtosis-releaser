@@ -42,19 +42,19 @@ const (
 	lastFetchedTimestampUintParseBase = 10
 	lastFetchedTimestampUintParseBits = 64
 	// How long we'll allow the user to go between fetches to ensure the repo is updated when they're releasing
-	fetchGracePeriod = 10 * time.Minute
+	fetchGracePeriod = 1 * time.Minute
 	extraNanosecondsToAddToLastFetchedTimestamp = 0
 	lastFetchedFileMode = 0644
 
-	relChangelogFilepath = "/docs/changelog.md"
+	relChangelogFilepath = "docs/changelog.md"
 
 	// Taken from guess-release-version.sh
-	SEMVER_REGEX = "^[0-9]+.[0-9]+.[0-9]$"
-	TBD_VERSION_HEADER_REGEX = "^#[[:space:]]*TBD[[:space:]]*$"
-	EXPECTED_NUM_TBD_HEADER_LINES = 1
-	VERSION_HEADER_REGEX = "^#[[:space:]]*[0-9]+.[0-9]+.[0-9]+[[:space:]]*$"
-	BREAKING_CHANGES_SUBHEADER_REGEX = "^###*[[:space:]]*[Bb]reak.*$"
-	NO_PREVIOUS_VERSION = "0.0.0" 
+	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]$"
+	tbdVersionHeaderStr = "^#[[:space:]]*TBD[[:space:]]*$"
+	expectedNumTBDHeaderLines = 1
+	versionHeaderRegex = "^#[[:space:]]*[0-9]+.[0-9]+.[0-9]+[:space:]]*$"
+	breakingChangesSubheaderRegex = "^###*[[:space:]]*[Bb]reak*$"
+	noPreviousVersion = "0.0.0" 
 )
 
 func main() {
@@ -69,7 +69,7 @@ func runMain() error {
 	checkArgs("<private key filepath>", "<name>", "<email>")
 	privateKeyFilepath, name, email  := os.Args[1], os.Args[2], os.Args[3]
 
-	fmt.Println("Setting up git auth for release...")
+	logrus.Infof("Setting up git auth for release...")
 	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting private key file.")
 	}
@@ -78,7 +78,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating git opreations.")
 	}
 
-	fmt.Println("Starting release process...")
+	logrus.Infof("Starting release process...")
 	currentWorkingDirectory, err := os.Getwd()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
@@ -91,7 +91,7 @@ func runMain() error {
 	}
 
 
-	fmt.Println("Retrieving git information...")
+	logrus.Infof("Retrieving git information...")
 	repository, err := git.PlainOpen(currentWorkingDirectory)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to open the existing git repository.")
@@ -102,19 +102,19 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
 	}
 
-	fmt.Println("Conducting pre release checks...")
+	logrus.Infof("Conducting pre release checks...")
 	worktree, err := repository.Worktree()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
 	}
 
-	fmt.Println("Checking out master branch...")
+	logrus.Infof("Checking out master branch...")
 	err = worktree.Checkout(&git.CheckoutOptions{Branch: "refs/heads/master"})
 	if err != nil {
 		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", masterBranchName, masterBranchName)
 	}
 
-	fmt.Println("Checking out that local master and origin master are in sync...")
+	logrus.Infof("Checking out that local master and origin master are in sync...")
 	// Check no staged or unstaged changes exist on the branch before release
 	currWorktreeStatus, err := worktree.Status()
 	if err != nil {
@@ -127,7 +127,7 @@ func runMain() error {
 		return nil
 	}
 
-	fmt.Println("Fetching origin if needed...")
+	logrus.Infof("Fetching origin if needed...")
 	// Fetch remote if needed
 	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
 	shouldFetch := determineShouldFetch(lastFetchedFilepath)
@@ -157,13 +157,13 @@ func runMain() error {
 
 	isLocalMasterInSyncWithRemoteMaster := localMasterHash.String() == remoteMasterHash.String()
 	if !isLocalMasterInSyncWithRemoteMaster {
-		fmt.Println("The local master branch is not in sync with the remote master branch. Must be in sync to conduct release process.")
+		logrus.Infof("The local master branch is not in sync with the remote master branch. Must be in sync to conduct release process.")
 		return nil
 	}
 
-	fmt.Println("Finished prererelease checks.")
+	logrus.Infof("Finished prererelease checks.")
 	
-	fmt.Println("Guessing next release version...")
+	fmt.Prin("Guessing next release version...")
 	latestReleaseVersion := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
 
 	// Conduct changelog file validation
@@ -175,7 +175,7 @@ func runMain() error {
 	}
 	versionHeaderCount := grepFile(changelogFilepath, VERSION_HEADER_REGEX)
 	if versionHeaderCount == 0 {
-		fmt.Println("No previous changelog versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
+		logrus.Infof("No previous changelog versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
 		return nil
 	}
 
@@ -203,20 +203,20 @@ func runMain() error {
 		}
 	}()
 
-	fmt.Println("Running prerelease scripts...")
+	logrus.Infof("Running prerelease scripts...")
 	preReleaseScriptsDirpath := path.Join(currentWorkingDirectory, relScriptsDirpath)
 	err = runPreReleaseScripts(preReleaseScriptsDirpath, nextReleaseVersion.String())
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
 	}
 
-	fmt.Println("Updating the changelog...")
+	logrus.Infof("Updating the changelog...")
 	err = updateChangelog(changelogFilepath, nextReleaseVersion.String())
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while updating the changelog.")
 	}
 
-	fmt.Println("Committing changes locally...")
+	logrus.Infof("Committing changes locally...")
 	// Commit pre release changes
 	err = worktree.AddWithOptions(&git.AddOptions{All: true})
 	if err != nil {
@@ -249,7 +249,7 @@ func runMain() error {
 		}
 	}()
 
-	fmt.Println("Setting next release version tag...")
+	logrus.Infof("Setting next release version tag...")
 	// Set next release version tag
 	head, err := repository.Head()
 	if err != nil {
@@ -268,7 +268,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
 	}
 
-	fmt.Println("Pushing release changes to master...")
+	logrus.Infof("Pushing release changes to master...")
 	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
 	err = repository.Push(pushCommitOpts)
 	if err != nil {
@@ -282,7 +282,7 @@ func runMain() error {
 		}
 	}()
 
-	fmt.Println("Pushing release tag to master...")
+	logrus.Infof("Pushing release tag to master...")
 	pushTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
 		RemoteName: originRemoteName,
@@ -296,7 +296,7 @@ func runMain() error {
 	undoChanges = false
 	undoReleaseTag = false
 	undoPushToMaster = false
-	fmt.Println("Release success.")
+	logrus.Infof("Release success.")
 	return nil
 }
 
