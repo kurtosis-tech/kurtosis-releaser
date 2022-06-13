@@ -148,7 +148,6 @@ func runMain() error {
 	// Check that local master and remote master are in sync
 	localMasterBranchName := masterBranchName
 	remoteMasterBranchName := fmt.Sprintf("%v/%v", originRemoteName, masterBranchName)
-
 	localMasterHash, err := repository.ResolveRevision(plumbing.Revision(localMasterBranchName))
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMasterBranchName)
@@ -157,7 +156,6 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", remoteMasterBranchName)
 	}
-
 	isLocalMasterInSyncWithRemoteMaster := localMasterHash.String() == remoteMasterHash.String()
 	if !isLocalMasterInSyncWithRemoteMaster {
 		return stacktrace.NewError("The %s branch is not in sync with the %s branch. Must be in sync to conduct release process.", masterBranchName, originRemoteName)
@@ -189,11 +187,14 @@ func runMain() error {
 	logrus.Infof("Finished prererelease checks.")
 
 	logrus.Infof("Guessing next release version...")
-	latestReleaseVersion, err := getLatestReleaseVersion(repository, noPreviousVersion)
+	latestReleaseVersion, err := getLatestReleaseVersion(repository)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the latest release version.")
 	}
-	existsBreakingChanges := doBreakingChangesExist(changelogFilepath)
+	existsBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist.")
+	}
 	var nextReleaseVersion semver.Version
 	if existsBreakingChanges {
 		nextReleaseVersion = latestReleaseVersion.IncMinor()
@@ -344,7 +345,7 @@ func determineShouldFetch(lastFetchedFilepath string) (bool, error) {
 	return time.Now().After(noFetchNeededBefore), nil
 }
 
-func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (*semver.Version, error) {
+func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 	tagrefs, err := repo.Tags()
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "An error occurred while retrieving tags for repository")
@@ -383,10 +384,10 @@ func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (*semve
 	return latestReleaseTagSemVer, nil
 }
 
-func doBreakingChangesExist(changelogFilepath string) bool {
-	changelogFile, err := os.Open(changelogFilepath);
+func doBreakingChangesExist(changelogFilepath string) (bool, error) {
+	changelogFile, err := os.Open(changelogFilepath)
 	if err != nil {
-		logrus.Errorf("Error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath, err)
+		return false, stacktrace.Propagate(err, "An error occurred attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
 	defer changelogFile.Close()
 
@@ -398,7 +399,7 @@ func doBreakingChangesExist(changelogFilepath string) bool {
 		}
     }
 	if err := scanner.Err(); err != nil {
-        logrus.Errorf("An error occurred while scanning file.\n", err)
+        return false, stacktrace.Propagate(err, "An error occurred while scanning for the TBD header in the changelog file at provided path: '%s'.\n", changelogFilepath)
     }
 	// Scan file until next version header detected, searching for Breaking Changes header along the way
 	foundBreakingChanges := false
@@ -412,10 +413,10 @@ func doBreakingChangesExist(changelogFilepath string) bool {
 		}
 	}
     if err := scanner.Err(); err != nil {
-        logrus.Errorf("An error occurred while scanning file.\n", err)
+		return false, stacktrace.Propagate(err, "An error occurred while scanning for the breaking changes header in the changelog file at provided path: '%s'.\n", changelogFilepath)
     }
 
-    return foundBreakingChanges
+    return foundBreakingChanges, nil
 }
 
 func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string) error {
