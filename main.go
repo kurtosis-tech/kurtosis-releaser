@@ -55,7 +55,7 @@ const (
 	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]$"
 	tbdHeaderRegexStr = "^#[[:space:]]*TBD[[:space:]]*$"
 	versionHeaderRegexStr = "^#[[:space:]]*[0-9]+.[0-9]+.[0-9]+[:space:]]*$"
-	breakingChangesSubheaderRegexStr = "^###*[[:space:]]*[Bb]reak*$"
+	breakingChangesSubheaderRegexStr = 	"^###*[[:space:]]*[Bb]reak.*$"
 )
 
 var (
@@ -198,7 +198,7 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the latest release version.")
 	}
-	existsBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
+	existsBreakingChanges, err := doBreakingChangesExist(changelogFilepath, breakingChangesSubheaderRegexStr)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist.")
 	}
@@ -290,7 +290,7 @@ func runMain() error {
 			// git tag -d
 			err = repository.DeleteTag(vReleaseTag)
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, err)
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, err)
 			}
 		}
 	}()
@@ -312,15 +312,24 @@ func runMain() error {
 	shouldUndoVPrefixedReleaseTag = false
 
 	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName)
-	pushTagOpts := &git.PushOptions{
+	// releaseTagRefSpec := fmt.Sprintf("%s/%s", tagsPrefix, releaseTag)
+	pushReleaseTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
 		RemoteName: originRemoteName,
 		RefSpecs:   []config.RefSpec{config.RefSpec(tagRefSpec)},
 	}
-	err = repository.Push(pushTagOpts)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release tags to '%s'.", remoteMasterBranchName)
+	if 	err = repository.Push(pushReleaseTagOpts); err != nil {
+		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'.", releaseTag, remoteMasterBranchName)
 	}
+	// vReleaseTagRefSpec := fmt.Sprintf("%s/%s", tagsPrefix, vReleaseTag)
+	// pushVPrefixedReleaseTagOpts := &git.PushOptions{
+	// 	Auth:       gitAuth,
+	// 	RemoteName: originRemoteName,
+	// 	RefSpecs:   []config.RefSpec{config.RefSpec(vReleaseTagRefSpec)},
+	// }
+	// if 	err = repository.Push(pushVPrefixedReleaseTagOpts); err != nil {
+	// 	logrus.Errorf("An error occurred while pushing release tag: '%s' to '%s'.", vReleaseTag, remoteMasterBranchName, err)
+	// }
 
 	shouldWarnAboutUndoingRemotePush = false
 
@@ -391,12 +400,13 @@ func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 	return latestReleaseTagSemVer, nil
 }
 
-func doBreakingChangesExist(changelogFilepath string) (bool, error) {
+func doBreakingChangesExist(changelogFilepath string, breakingChangesRegexStr string) (bool, error) {
 	changelogFile, err := os.Open(changelogFilepath)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "An error occurred attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
 	defer changelogFile.Close()
+	breakingChangesRegex, err := regexp.Compile(breakingChangesRegexStr)
 
     scanner := bufio.NewScanner(changelogFile)
 	// Find TBD header
@@ -414,7 +424,6 @@ func doBreakingChangesExist(changelogFilepath string) (bool, error) {
 		if breakingChangesRegex.Match(scanner.Bytes()){
 			foundBreakingChanges = true
 		}
-		
 		if versionHeaderRegex.Match(scanner.Bytes()){
 			break
 		}
@@ -422,7 +431,7 @@ func doBreakingChangesExist(changelogFilepath string) (bool, error) {
     if err := scanner.Err(); err != nil {
 		return false, stacktrace.Propagate(err, "An error occurred while scanning for the breaking changes header in the changelog file at provided path: '%s'.\n", changelogFilepath)
     }
-
+	fmt.Println("found breaking changes: %t", foundBreakingChanges)
     return foundBreakingChanges, nil
 }
 
@@ -458,16 +467,17 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	}
 
 	lines := bytes.Split(changelogFile, []byte("\n"))
-	newLines:= make([][]byte, len(lines) + 1) 
-	// Add a new TBD head for next release
+	newLines:= make([][]byte, len(lines) + 2) 
+	// Add a new TBD header for next release
 	newLines[0] = []byte("# TBD")
+	newLines[1] = []byte(" \n")
 	for i, line := range lines {
 		// Change current TBD header to Release Version header
 		if tbdHeaderRegex.Match(line){
 			releaseVersionHeader := fmt.Sprintf("# %s", releaseVersion)
 			newLines[i + 1] = []byte(releaseVersionHeader)
 		}
-		if i == 0|| i == len(newLines) - 1{
+		if i == 0|| i == len(newLines) - 1 {
 			continue
 		}
 		newLines[i + 1] = line
