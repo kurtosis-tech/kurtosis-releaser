@@ -104,7 +104,6 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to open the existing git repository.")
 	}
-
 	originRemote, err := repository.Remote(originRemoteName)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
@@ -116,7 +115,6 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
 	}
 
-	logrus.Infof("Checking that %s and %s are in sync...", masterBranchName, originRemoteName)
 	// Check no staged or unstaged changes exist on the branch before release
 	currWorktreeStatus, err := worktree.Status()
 	if err != nil {
@@ -147,6 +145,7 @@ func runMain() error {
 		}
 	}
 
+	logrus.Infof("Checking that %s and %s are in sync...", masterBranchName, originRemoteName)
 	// Check that local master and remote master are in sync
 	localMasterBranchName := masterBranchName
 	remoteMasterBranchName := fmt.Sprintf("%v/%v", originRemoteName, masterBranchName)
@@ -195,7 +194,6 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the latest release version.")
 	}
-
 	existsBreakingChanges := doBreakingChangesExist(changelogFilepath)
 	var nextReleaseVersion semver.Version
 	if existsBreakingChanges {
@@ -296,6 +294,7 @@ func runMain() error {
 	if err = repository.Push(pushCommitOpts); err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s/%s'.", originRemoteName, masterBranchName)
 	}
+
 	shouldWarnAboutUndoingRemotePush := true
 	defer func() {
 		if shouldWarnAboutUndoingRemotePush {
@@ -319,6 +318,7 @@ func runMain() error {
 	}
 
 	shouldWarnAboutUndoingRemotePush = false
+
 	logrus.Infof("Release success.")
 	return nil
 }
@@ -352,6 +352,7 @@ func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (*semve
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "An error occurred while retrieving tags for repository")
 	}
+
 	// Trim tagrefs and filter for only tags with X.Y.Z version format
 	var allTagSemVers []*semver.Version
 	err = tagrefs.ForEach(func(tagref *plumbing.Reference) error {
@@ -427,6 +428,7 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string
 		return stacktrace.Propagate(err, "An error occurred attempting to open file at provided path. Are you sure '%s' exists?", preReleaseScriptsFilepath)
 	}
 	defer preReleaseScriptsFile.Close()
+	
 	scanner := bufio.NewScanner(preReleaseScriptsFile)
 	var allScriptFilepaths []string
 	for scanner.Scan() {
@@ -440,6 +442,7 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string
 			return stacktrace.Propagate(err, "An error occurred attempting to run the following pre release script command: '%s'", scriptCmdString)
 		}
 	}
+
 	return nil
 }
 
@@ -448,6 +451,7 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
+
 	lines := bytes.Split(changelogFile, []byte("\n"))
 	newLines:= make([][]byte, len(lines) + 1) 
 	// Add a new TBD head for next release
@@ -468,6 +472,7 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error attempting to write changelog file to '%s'.", changelogFilepath)
 	}
+
 	return nil
 }
 
