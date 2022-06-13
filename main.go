@@ -36,6 +36,7 @@ const (
 
 	tagsPrefix = "refs/tags/"
 	tagRefSpec = "refs/tags/*:refs/tags/*"
+	headRef = "refs/heads/"
 
 	// The name of the file inside the Git directory which will store when we last fetched (in Unix seconds)
 	lastFetchedFilename = "last-fetch.txt"
@@ -49,12 +50,19 @@ const (
 	relChangelogFilepath = "docs/changelog.md"
 
 	// Taken from guess-release-version.sh
-	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]$"
-	tbdVersionHeaderStr = "^#[[:space:]]*TBD[[:space:]]*$"
 	expectedNumTBDHeaderLines = 1
-	versionHeaderRegex = "^#[[:space:]]*[0-9]+.[0-9]+.[0-9]+[:space:]]*$"
-	breakingChangesSubheaderRegex = "^###*[[:space:]]*[Bb]reak*$"
 	noPreviousVersion = "0.0.0" 
+	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]$"
+	tbdHeaderRegexStr = "^#[[:space:]]*TBD[[:space:]]*$"
+	versionHeaderRegexStr = "^#[[:space:]]*[0-9]+.[0-9]+.[0-9]+[:space:]]*$"
+	breakingChangesSubheaderRegexStr = "^###*[[:space:]]*[Bb]reak*$"
+)
+
+var (
+	semverRegex = regexp.MustCompile(semverRegexStr)
+	tbdHeaderRegex = regexp.MustCompile(tbdHeaderRegexStr)
+	versionHeaderRegex = regexp.MustCompile(versionHeaderRegexStr)
+	breakingChangesRegex = regexp.MustCompile(breakingChangesSubheaderRegexStr)
 )
 
 func main() {
@@ -71,19 +79,19 @@ func runMain() error {
 
 	logrus.Infof("Setting up git auth for release...")
 	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
-		return stacktrace.Propagate(err, "An error occurred getting private key file.")
+		return stacktrace.Propagate(err, "An error occurred getting private key file at the following path: '%s'.", privateKeyFilepath)
 	}
 	gitAuth, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating git opreations.")
+		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating git operations.")
 	}
 
 	logrus.Infof("Starting release process...")
-	currentWorkingDirectory, err := os.Getwd()
+	currentWorkingDirpath, err := os.Getwd()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
 	}
-	gitDirpath := path.Join(currentWorkingDirectory, gitDirname)
+	gitDirpath := path.Join(currentWorkingDirpath, gitDirname)
 	if _, err := os.Stat(gitDirpath); err != nil {
 		if os.IsNotExist(err) {
 			return stacktrace.Propagate(err, "An error occurred getting the git repository in this directory. This means that this binary is not being run from root of a git repository.")
@@ -92,7 +100,7 @@ func runMain() error {
 
 
 	logrus.Infof("Retrieving git information...")
-	repository, err := git.PlainOpen(currentWorkingDirectory)
+	repository, err := git.PlainOpen(currentWorkingDirpath)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to open the existing git repository.")
 	}
@@ -108,13 +116,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
 	}
 
-	logrus.Infof("Checking out master branch...")
-	err = worktree.Checkout(&git.CheckoutOptions{Branch: "refs/heads/master"})
-	if err != nil {
-		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", masterBranchName, masterBranchName)
-	}
-
-	logrus.Infof("Checking out that local master and origin master are in sync...")
+	logrus.Infof("Checking that %s and %s are in sync...", masterBranchName, originRemoteName)
 	// Check no staged or unstaged changes exist on the branch before release
 	currWorktreeStatus, err := worktree.Status()
 	if err != nil {
@@ -130,7 +132,10 @@ func runMain() error {
 	logrus.Infof("Fetching origin if needed...")
 	// Fetch remote if needed
 	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
-	shouldFetch := determineShouldFetch(lastFetchedFilepath)
+	shouldFetch, err := determineShouldFetch(lastFetchedFilepath)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while determining if we should fetch from '%s'.", lastFetchedFilepath)
+	}
 	if shouldFetch {
 		fetchOpts := &git.FetchOptions{Auth: gitAuth, RemoteName: originRemoteName}
 		if err := originRemote.Fetch(fetchOpts); err != nil && err != git.NoErrAlreadyUpToDate {
@@ -157,29 +162,41 @@ func runMain() error {
 
 	isLocalMasterInSyncWithRemoteMaster := localMasterHash.String() == remoteMasterHash.String()
 	if !isLocalMasterInSyncWithRemoteMaster {
-		logrus.Infof("The local master branch is not in sync with the remote master branch. Must be in sync to conduct release process.")
-		return nil
+		return stacktrace.NewError("The %s branch is not in sync with the %s branch. Must be in sync to conduct release process.", masterBranchName, originRemoteName)
 	}
 
-	logrus.Infof("Finished prererelease checks.")
+	logrus.Infof("Checking out %s branch...", masterBranchName)
+	masterBranchRef := plumbing.ReferenceName(fmt.Sprintf("%s%s", headRef, masterBranchName))
+	err = worktree.Checkout(&git.CheckoutOptions{Branch: masterBranchRef})
+	if err != nil {
+		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", masterBranchName, masterBranchName)
+	}
 	
-	fmt.Prin("Guessing next release version...")
-	latestReleaseVersion := getLatestReleaseVersion(repository, NO_PREVIOUS_VERSION)
-
 	// Conduct changelog file validation
-	changelogFilepath := path.Join(currentWorkingDirectory, relChangelogFilepath)
-	tbdHeaderCount := grepFile(changelogFilepath, TBD_VERSION_HEADER_REGEX)
-	if tbdHeaderCount != EXPECTED_NUM_TBD_HEADER_LINES {
-		fmt.Printf("There should be %d TBD header lines in the changelog. Instead there are %d.\n", EXPECTED_NUM_TBD_HEADER_LINES, tbdHeaderCount)
-		return nil
+	changelogFilepath := path.Join(currentWorkingDirpath, relChangelogFilepath)
+	tbdHeaderCount, err := grepFile(changelogFilepath, tbdHeaderRegex)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, tbdHeaderRegex.String())	
 	}
-	versionHeaderCount := grepFile(changelogFilepath, VERSION_HEADER_REGEX)
-	if versionHeaderCount == 0 {
-		logrus.Infof("No previous changelog versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
-		return nil
+	if tbdHeaderCount != expectedNumTBDHeaderLines {
+		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.\n", expectedNumTBDHeaderLines, tbdHeaderCount)
+	}
+	// versionHeaderCount, err := grepFile(changelogFilepath, versionHeaderRegex)
+	// if err != nil {
+	// 	return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, versionHeaderRegex.String())	
+	// }
+	// if versionHeaderCount == 0 {
+	// 	return stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
+	// }
+	logrus.Infof("Finished prererelease checks.")
+
+	logrus.Infof("Guessing next release version...")
+	latestReleaseVersion, err := getLatestReleaseVersion(repository, noPreviousVersion)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred getting the latest release version.")
 	}
 
-	existsBreakingChanges := detectBreakingChanges(changelogFilepath)
+	existsBreakingChanges := doBreakingChangesExist(changelogFilepath)
 	var nextReleaseVersion semver.Version
 	if existsBreakingChanges {
 		nextReleaseVersion = latestReleaseVersion.IncMinor()
@@ -187,24 +204,26 @@ func runMain() error {
 		nextReleaseVersion = latestReleaseVersion.IncPatch()
 	}
 
-	go wait()
-	fmt.Printf("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit))", nextReleaseVersion.String())
-	fmt.Scanln()
+	logrus.Infof("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit)", nextReleaseVersion.String())
+	_, err = fmt.Scanln()
+	if err != nil {
+		return nil
+	}
 
-	undoChanges := true
+	shouldResetLocalBranch := true
 	defer func() {
-		if undoChanges {
+		if shouldResetLocalBranch {
 			// git reset --hard origin/master
 			originMasterCommitHash, err := repository.ResolveRevision(plumbing.Revision(remoteMasterBranchName))
 			err = worktree.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: *originMasterCommitHash })
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo local changes made for release '%s'. Please run 'git reset --hard origin/master' to undo manually.", nextReleaseVersion.String(), err)
+				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo local changes made for release '%s'. Please run 'git reset --hard %s/%s' to undo manually.", nextReleaseVersion.String(), originRemoteName, masterBranchName, err)
 			}
 		}
 	}()
 
 	logrus.Infof("Running prerelease scripts...")
-	preReleaseScriptsDirpath := path.Join(currentWorkingDirectory, relScriptsDirpath)
+	preReleaseScriptsDirpath := path.Join(currentWorkingDirpath, relScriptsDirpath)
 	err = runPreReleaseScripts(preReleaseScriptsDirpath, nextReleaseVersion.String())
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
@@ -231,26 +250,10 @@ func runMain() error {
 		},
 	})
 
-	releaseTag := nextReleaseVersion.String()
-	vReleaseTag := fmt.Sprintf("v.%s", nextReleaseVersion.String())
-
-	undoReleaseTag := true
-	defer func() {
-		if undoReleaseTag {
-			// git tag -d
-			err = repository.DeleteTag(releaseTag)
-			if err!= nil {
-				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", releaseTag, err)
-			}
-			err = repository.DeleteTag(vReleaseTag)
-			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, err)
-			}
-		}
-	}()
-
 	logrus.Infof("Setting next release version tag...")
 	// Set next release version tag
+	releaseTag := nextReleaseVersion.String()
+	vReleaseTag := fmt.Sprintf("v%s", nextReleaseVersion.String())
 	head, err := repository.Head()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to get the ref to HEAD of the local repository.")
@@ -259,30 +262,52 @@ func runMain() error {
 		Message: releaseTag,
 	})
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
+		return stacktrace.Propagate(err, "An error occurred while attempting to create this git tag for the next release version: %s.", releaseTag)
 	}
+	shouldUndoReleaseTag := true
+	defer func() {
+		if shouldUndoReleaseTag {
+			// git tag -d
+			err = repository.DeleteTag(releaseTag)
+			if err!= nil {
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", releaseTag, err)
+			}
+		}
+	}()
 	_, err = repository.CreateTag(vReleaseTag, head.Hash(), &git.CreateTagOptions{
 		Message: vReleaseTag,
 	})
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while attempting to create a git tag for the next release version.")
+		return stacktrace.Propagate(err, "An error occurred while attempting to create this git tag for the next release version: %s.", vReleaseTag)
 	}
-
-	logrus.Infof("Pushing release changes to master...")
-	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
-	err = repository.Push(pushCommitOpts)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release changes to origin remote.")
-	}
-
-	undoPushToMaster := true
+	shouldUndoVPrefixedReleaseTag := true
 	defer func() {
-		if undoPushToMaster {
-			logrus.Errorf("ACTION REQUIRED: Error occurred pushing tag '%s' to master. Must undo the push to origin master manually. Follow this tutorial: 'LINK TO INSTRUCTIONS TO UNDO PUSH.'", nextReleaseVersion.String(), err)
+		if shouldUndoVPrefixedReleaseTag {
+			// git tag -d
+			err = repository.DeleteTag(vReleaseTag)
+			if err != nil {
+				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, err)
+			}
 		}
 	}()
 
-	logrus.Infof("Pushing release tag to master...")
+	logrus.Infof("Pushing release changes to '%s/%s'...", originRemoteName, masterBranchName)
+	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
+	if err = repository.Push(pushCommitOpts); err != nil {
+		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s/%s'.", originRemoteName, masterBranchName)
+	}
+	shouldWarnAboutUndoingRemotePush := true
+	defer func() {
+		if shouldWarnAboutUndoingRemotePush {
+			logrus.Errorf("ACTION REQUIRED: An error occurred meaning we need to undo our push-to-%s, but this is a dangerous operation for its risk that it will destroy history on the remote so you'll need to do this manually. Follow this tutorial: 'LINK TO INSTRUCTIONS TO UNDO PUSH.'", originRemoteName, err)
+		}
+	}()
+
+	shouldResetLocalBranch = false
+	shouldUndoReleaseTag = false
+	shouldUndoVPrefixedReleaseTag = false
+
+	logrus.Infof("Pushing release tags to '%s/%s'...", originRemoteName, masterBranchName)
 	pushTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
 		RemoteName: originRemoteName,
@@ -290,20 +315,22 @@ func runMain() error {
 	}
 	err = repository.Push(pushTagOpts)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release tags to origin remote.")
+		return stacktrace.Propagate(err, "An error occurred while pushing release tags to '%s/%s'.", originRemoteName, masterBranchName)
 	}
 
-	undoChanges = false
-	undoReleaseTag = false
-	undoPushToMaster = false
+	shouldWarnAboutUndoingRemotePush = false
 	logrus.Infof("Release success.")
 	return nil
 }
 
-func determineShouldFetch(lastFetchedFilepath string) bool {
+func determineShouldFetch(lastFetchedFilepath string) (bool, error) {
 	lastFetchedUnixTimeStr, err := os.ReadFile(lastFetchedFilepath)
 	if err != nil {
-		return true
+		if os.IsNotExist(err) {
+			return false, stacktrace.Propagate(err, "An error occurred reading the file to determine fetching:'%s'.", lastFetchedFilepath)
+		}
+		logrus.Errorf("An error occurred reading the file to determine fetching at '%s'.", lastFetchedFilepath, err)
+		return true, nil
 	}
 
 	lastFetchedUnixTime, err := strconv.ParseUint(
@@ -312,79 +339,68 @@ func determineShouldFetch(lastFetchedFilepath string) bool {
 		lastFetchedTimestampUintParseBits,
 	)
 	if err != nil {
-		logrus.Errorf("An error occurred parsing last-fetch Unix time string '%v':\n%v", err)
+		return false, stacktrace.Propagate(err, "An error occurred parsing last-fetch Unix time string: '%v'.", lastFetchedUnixTimeStr)
 	}
 	lastFetchedTime := time.Unix(int64(lastFetchedUnixTime), extraNanosecondsToAddToLastFetchedTimestamp)
 	noFetchNeededBefore := lastFetchedTime.Add(fetchGracePeriod)
 
-	return time.Now().After(noFetchNeededBefore)
+	return time.Now().After(noFetchNeededBefore), nil
 }
 
-func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) semver.Version {
-	semverRegex, err := regexp.Compile(SEMVER_REGEX)
-	if err != nil {
-		logrus.Errorf("Could not parse regexp: '%s'", SEMVER_REGEX, err)
-	}
-
+func getLatestReleaseVersion(repo *git.Repository, noPrevVersion string) (*semver.Version, error) {
 	tagrefs, err := repo.Tags()
 	if err != nil {
-		logrus.Errorf("An error occurred while retrieving tags for repository", err)
+		return nil, stacktrace.Propagate(err, "An error occurred while retrieving tags for repository")
 	}
 	// Trim tagrefs and filter for only tags with X.Y.Z version format
-	var tagSemVers []*semver.Version
-	tagrefs.ForEach(func(tagref *plumbing.Reference) error {
+	var allTagSemVers []*semver.Version
+	err = tagrefs.ForEach(func(tagref *plumbing.Reference) error {
 		tagName := tagref.Name().String()
 		tagName = strings.ReplaceAll(tagName, tagsPrefix, "")
 
 		if semverRegex.Match([]byte(tagName)) {
 			tagSemVer, err := semver.StrictNewVersion(tagName)
 			if err != nil {
-				logrus.Errorf("An error occurred while converting tags to semantic version.", err)
+				return stacktrace.Propagate(err, "An error occurred while retrieving the following tag: %s.", tagName)
 			}
-			tagSemVers = append(tagSemVers, tagSemVer) 
+			allTagSemVers = append(allTagSemVers, tagSemVer) 
 		}
 		return nil
 	})
-
-	var latestReleaseTagSemVer *semver.Version
-	if len(tagSemVers) == 0 {
-		latestReleaseTagSemVer, err = semver.StrictNewVersion(NO_PREVIOUS_VERSION)
-		if err != nil {
-			logrus.Errorf("An error occurred while converting tags to semantic version.", err)
-		}
-	} else {
-		sort.Sort(sort.Reverse(semver.Collection(tagSemVers)))
-		latestReleaseTagSemVer = tagSemVers[0]
+	if err != nil {
+		return nil, err
 	}
 
-	return *latestReleaseTagSemVer
+	var latestReleaseTagSemVer *semver.Version
+	if len(allTagSemVers) == 0 {
+		latestReleaseTagSemVer, err = semver.StrictNewVersion(noPreviousVersion)
+		if err != nil {
+			return nil, stacktrace.Propagate(err, "An error occurred creating '%s' semantic version.", noPreviousVersion)
+		}
+	} else {
+		sort.Sort(sort.Reverse(semver.Collection(allTagSemVers)))
+		latestReleaseTagSemVer = allTagSemVers[0]
+	}
+
+	return latestReleaseTagSemVer, nil
 }
 
-func detectBreakingChanges(changelogFilepath string) bool {
+func doBreakingChangesExist(changelogFilepath string) bool {
 	changelogFile, err := os.Open(changelogFilepath);
 	if err != nil {
 		logrus.Errorf("Error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath, err)
 	}
 	defer changelogFile.Close()
-	tbdRegex, err := regexp.Compile(TBD_VERSION_HEADER_REGEX)
-	if err != nil {
-		logrus.Errorf("Could not parse regexp: '%s'", TBD_VERSION_HEADER_REGEX, err)
-	}
-	breakingChangesRegex, err := regexp.Compile(BREAKING_CHANGES_SUBHEADER_REGEX)
-	if err != nil {
-		logrus.Errorf("Could not parse regexp: '%s'", BREAKING_CHANGES_SUBHEADER_REGEX, err)
-	}
-	versionHeaderRegex, err := regexp.Compile(VERSION_HEADER_REGEX)
-	if err != nil {
-		logrus.Errorf("Could not parse regexp: '%s'", VERSION_HEADER_REGEX, err)
-	}
 
     scanner := bufio.NewScanner(changelogFile)
 	// Find TBD header
     for scanner.Scan() {
-		if tbdRegex.Match(scanner.Bytes()) {
+		if tbdHeaderRegex.Match(scanner.Bytes()) {
 			break
 		}
+    }
+	if err := scanner.Err(); err != nil {
+        logrus.Errorf("An error occurred while scanning file.\n", err)
     }
 	// Scan file until next version header detected, searching for Breaking Changes header along the way
 	foundBreakingChanges := false
@@ -397,10 +413,10 @@ func detectBreakingChanges(changelogFilepath string) bool {
 			break
 		}
 	}
-
     if err := scanner.Err(); err != nil {
         logrus.Errorf("An error occurred while scanning file.\n", err)
     }
+
     return foundBreakingChanges
 }
 
@@ -408,43 +424,37 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string
 	preReleaseScriptsFilepath := path.Join(preReleaseScriptsDirpath, preReleaseScriptsFilename)
 	preReleaseScriptsFile, err := os.Open(preReleaseScriptsFilepath);
 	if err != nil {
-		logrus.Errorf("An error occurred attempting to open file at provided path. Are you sure '%s' exists?", preReleaseScriptsFilepath, err)
-		return err
+		return stacktrace.Propagate(err, "An error occurred attempting to open file at provided path. Are you sure '%s' exists?", preReleaseScriptsFilepath)
 	}
 	defer preReleaseScriptsFile.Close()
 	scanner := bufio.NewScanner(preReleaseScriptsFile)
-	var scripts []string
+	var allScriptFilepaths []string
 	for scanner.Scan() {
-		scripts = append(scripts, scanner.Text())
+		allScriptFilepaths = append(allScriptFilepaths, scanner.Text())
 	}
-	for _, script := range scripts {
-		scriptCmdString := path.Join(preReleaseScriptsDirpath, script)
+	for _, scriptFilepath := range allScriptFilepaths {
+		scriptCmdString := path.Join(preReleaseScriptsDirpath, scriptFilepath)
 		scriptCmd := exec.Command(scriptCmdString, releaseVersion)
 		err := scriptCmd.Run()
 		if err != nil {
-			logrus.Errorf("An error occurred attempting to run the following pre release script command: '%s'", scriptCmdString, err)
-			return err
+			return stacktrace.Propagate(err, "An error occurred attempting to run the following pre release script command: '%s'", scriptCmdString)
 		}
 	}
 	return nil
 }
 
 func updateChangelog(changelogFilepath string, releaseVersion string) error {
-	clFile, err := os.ReadFile(changelogFilepath)
+	changelogFile, err := os.ReadFile(changelogFilepath)
 	if err != nil {
-		logrus.Errorf("Error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath, err)
+		return stacktrace.Propagate(err, "An error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
-	tbdRegex, err := regexp.Compile(TBD_VERSION_HEADER_REGEX)
-	if err != nil {
-		logrus.Errorf("Could not parse regexp: '%s'", TBD_VERSION_HEADER_REGEX, err)
-	}
-	lines := bytes.Split(clFile, []byte("\n"))
+	lines := bytes.Split(changelogFile, []byte("\n"))
 	newLines:= make([][]byte, len(lines) + 1) 
 	// Add a new TBD head for next release
 	newLines[0] = []byte("# TBD")
 	for i, line := range lines {
 		// Change current TBD header to Release Version header
-		if tbdRegex.Match(line){
+		if tbdHeaderRegex.Match(line){
 			releaseVersionHeader := fmt.Sprintf("# %s", releaseVersion)
 			newLines[i + 1] = []byte(releaseVersionHeader)
 		}
@@ -456,33 +466,29 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	newCLFile := bytes.Join(newLines, []byte("\n"))
 	err = os.WriteFile(changelogFilepath, newCLFile, 0644)
 	if err != nil {
-		logrus.Errorf("Error attempting to write changelog file to '%s'.", changelogFilepath, err)
+		return stacktrace.Propagate(err, "An error attempting to write changelog file to '%s'.", changelogFilepath)
 	}
 	return nil
 }
 
 // adapted from: https://stackoverflow.com/questions/26709971/could-this-be-more-efficient-in-go
-func grepFile(file string, regexPat string) int64 {
-	r, err := regexp.Compile(regexPat)
-	if err != nil {
-		logrus.Errorf("Could not parse regexp: '%s'", regexPat, err)
-	}
-    patCount := int64(0)
-    f, err := os.Open(file)
+func grepFile(filePath string, regexPat *regexp.Regexp) (int64, error) {
+    numLinesMatchingPattern := int64(0)
+    file, err := os.Open(filePath)
     if err != nil {
-		logrus.Errorf("An error occurred while attempting to open file", err)
+		return -1, stacktrace.Propagate(err, "An error occurred while attempting to open file: '%s'.", filePath)
     }
-    defer f.Close()
-    scanner := bufio.NewScanner(f)
+    defer file.Close()
+    scanner := bufio.NewScanner(file)
     for scanner.Scan() {
-		if r.Match(scanner.Bytes()) {
-			patCount++
+		if regexPat.Match(scanner.Bytes()) {
+			numLinesMatchingPattern++
 		}
     }
     if err := scanner.Err(); err != nil {
-        logrus.Errorf("An error occurred while scanning file.\n%v", err)
+		return -1, stacktrace.Propagate(err, "An error occurred while scanning file: '%s'.", filePath)
     }
-    return patCount
+    return numLinesMatchingPattern, nil
 }
 
 func checkArgs(arg ...string){
@@ -490,12 +496,4 @@ func checkArgs(arg ...string){
 		fmt.Printf("Usage: %s %s", os.Args[0], strings.Join(arg, " "))
 		os.Exit(1)
 	}
-}
-
-func wait() {
-    i := 0
-    for {
-        time.Sleep(time.Second * 1)
-        i++
-    }
 }
