@@ -74,8 +74,8 @@ func main() {
 }
 
 func runMain() error {
-	checkArgs("<private key filepath>", "<name>", "<email>")
-	privateKeyFilepath, name, email  := os.Args[1], os.Args[2], os.Args[3]
+	checkArgs("<private key filepath>")
+	privateKeyFilepath := os.Args[1]
 
 	logrus.Infof("Setting up git auth for release...")
 	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
@@ -98,11 +98,19 @@ func runMain() error {
 		}
 	}
 
-
 	logrus.Infof("Retrieving git information...")
 	repository, err := git.PlainOpen(currentWorkingDirpath)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to open the existing git repository.")
+	}
+	globalRepoConfig, err := repository.ConfigScoped(config.GlobalScope)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while attempting to retrieve the global git config for this repo.")
+	}
+	name := globalRepoConfig.User.Name
+	email := globalRepoConfig.User.Email
+	if name == "" || email == "" {
+		return stacktrace.NewError("The following empty name or email were detected in global git config: 'name: %s', 'email: %s'. Make sure these are set for annotating release commits.", name, email)
 	}
 	originRemote, err := repository.Remote(originRemoteName)
 	if err != nil {
@@ -120,7 +128,6 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the status of the worktree of the repository.")
 	}
-
 	isClean := currWorktreeStatus.IsClean()
 	if !isClean {
 		return stacktrace.NewError("The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'\n", currWorktreeStatus.String())
