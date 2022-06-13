@@ -83,7 +83,7 @@ func runMain() error {
 	}
 	gitAuth, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred generating public key for authenticating git operations.")
+		return stacktrace.Propagate(err, "An error occurred opening public key for authenticating git operations.")
 	}
 
 	logrus.Infof("Starting release process...")
@@ -123,8 +123,7 @@ func runMain() error {
 
 	isClean := currWorktreeStatus.IsClean()
 	if !isClean {
-		fmt.Printf("The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'\n", currWorktreeStatus)
-		return nil
+		return stacktrace.NewError("The branch contains modified files. Please ensure the working tree is clean before attempting to release. Currently the status is '%s'\n", currWorktreeStatus.String())
 	}
 
 	logrus.Infof("Fetching origin if needed...")
@@ -212,10 +211,9 @@ func runMain() error {
 	defer func() {
 		if shouldResetLocalBranch {
 			// git reset --hard origin/master
-			originMasterCommitHash, err := repository.ResolveRevision(plumbing.Revision(remoteMasterBranchName))
-			err = worktree.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: *originMasterCommitHash })
+			err = worktree.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: *remoteMasterHash })
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo local changes made for release '%s'. Please run 'git reset --hard %s/%s' to undo manually.", nextReleaseVersion.String(), originRemoteName, masterBranchName, err)
+				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo local changes made for release '%s'. Please run 'git reset --hard %s' to undo manually.", nextReleaseVersion.String(), remoteMasterBranchName, err)
 			}
 		}
 	}()
@@ -267,7 +265,7 @@ func runMain() error {
 		if shouldUndoReleaseTag {
 			// git tag -d
 			err = repository.DeleteTag(releaseTag)
-			if err!= nil {
+			if err != nil {
 				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", releaseTag, err)
 			}
 		}
@@ -289,12 +287,11 @@ func runMain() error {
 		}
 	}()
 
-	logrus.Infof("Pushing release changes to '%s/%s'...", originRemoteName, masterBranchName)
+	logrus.Infof("Pushing release changes to '%s'...", remoteMasterBranchName)
 	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
 	if err = repository.Push(pushCommitOpts); err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s/%s'.", originRemoteName, masterBranchName)
+		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s'.", remoteMasterBranchName)
 	}
-
 	shouldWarnAboutUndoingRemotePush := true
 	defer func() {
 		if shouldWarnAboutUndoingRemotePush {
@@ -306,7 +303,7 @@ func runMain() error {
 	shouldUndoReleaseTag = false
 	shouldUndoVPrefixedReleaseTag = false
 
-	logrus.Infof("Pushing release tags to '%s/%s'...", originRemoteName, masterBranchName)
+	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName)
 	pushTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
 		RemoteName: originRemoteName,
@@ -314,7 +311,7 @@ func runMain() error {
 	}
 	err = repository.Push(pushTagOpts)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release tags to '%s/%s'.", originRemoteName, masterBranchName)
+		return stacktrace.Propagate(err, "An error occurred while pushing release tags to '%s'.", remoteMasterBranchName)
 	}
 
 	shouldWarnAboutUndoingRemotePush = false
@@ -428,7 +425,7 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string
 		return stacktrace.Propagate(err, "An error occurred attempting to open file at provided path. Are you sure '%s' exists?", preReleaseScriptsFilepath)
 	}
 	defer preReleaseScriptsFile.Close()
-	
+
 	scanner := bufio.NewScanner(preReleaseScriptsFile)
 	var allScriptFilepaths []string
 	for scanner.Scan() {
@@ -498,7 +495,7 @@ func grepFile(filePath string, regexPat *regexp.Regexp) (int64, error) {
 
 func checkArgs(arg ...string){
 	if len(os.Args) < len(arg)+1 {
-		fmt.Printf("Usage: %s %s", os.Args[0], strings.Join(arg, " "))
+		logrus.Infof("Usage: %s %s", os.Args[0], strings.Join(arg, " "))
 		os.Exit(1)
 	}
 }
