@@ -348,7 +348,7 @@ func determineShouldFetch(lastFetchedFilepath string) (bool, error) {
 func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 	tagrefs, err := repo.Tags()
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "An error occurred while retrieving tags for repository")
+		return nil, stacktrace.Propagate(err, "An error occurred while retrieving tags for repository.")
 	}
 
 	// Trim tagrefs and filter for only tags with X.Y.Z version format
