@@ -198,7 +198,7 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the latest release version.")
 	}
-	existsBreakingChanges, err := doBreakingChangesExist(changelogFilepath, breakingChangesSubheaderRegexStr)
+	existsBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist.")
 	}
@@ -400,13 +400,12 @@ func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 	return latestReleaseTagSemVer, nil
 }
 
-func doBreakingChangesExist(changelogFilepath string, breakingChangesRegexStr string) (bool, error) {
+func doBreakingChangesExist(changelogFilepath string) (bool, error) {
 	changelogFile, err := os.Open(changelogFilepath)
 	if err != nil {
 		return false, stacktrace.Propagate(err, "An error occurred attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
 	defer changelogFile.Close()
-	breakingChangesRegex, err := regexp.Compile(breakingChangesRegexStr)
 
     scanner := bufio.NewScanner(changelogFile)
 	// Find TBD header
@@ -431,7 +430,7 @@ func doBreakingChangesExist(changelogFilepath string, breakingChangesRegexStr st
     if err := scanner.Err(); err != nil {
 		return false, stacktrace.Propagate(err, "An error occurred while scanning for the breaking changes header in the changelog file at provided path: '%s'.\n", changelogFilepath)
     }
-	fmt.Println("found breaking changes: %t", foundBreakingChanges)
+
     return foundBreakingChanges, nil
 }
 
