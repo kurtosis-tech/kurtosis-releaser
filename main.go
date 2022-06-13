@@ -325,10 +325,10 @@ func determineShouldFetch(lastFetchedFilepath string) (bool, error) {
 	lastFetchedUnixTimeStr, err := os.ReadFile(lastFetchedFilepath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return false, stacktrace.Propagate(err, "An error occurred reading the file to determine fetching:'%s'.", lastFetchedFilepath)
+			logrus.Errorf("An error occurred opening the file to determine fetching at '%s'..", lastFetchedFilepath, err)
+			return true, nil
 		}
-		logrus.Errorf("An error occurred reading the file to determine fetching at '%s'.", lastFetchedFilepath, err)
-		return true, nil
+		return false, stacktrace.Propagate(err, "An error occurred reading the file to determine fetching:'%s'.", lastFetchedFilepath)
 	}
 
 	lastFetchedUnixTime, err := strconv.ParseUint(
