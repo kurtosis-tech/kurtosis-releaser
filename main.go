@@ -48,6 +48,7 @@ const (
 	lastFetchedFileMode = 0644
 
 	relChangelogFilepath = "docs/changelog.md"
+	changelogFileMode = 0644
 
 	// Taken from guess-release-version.sh
 	expectedNumTBDHeaderLines = 1
@@ -474,19 +475,20 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	newLines:= make([][]byte, len(lines) + 2) 
 	// Add a new TBD header for next release
 	newLines[0] = []byte("# TBD")
-	for i, line := range lines {
+	i := 1
+	for _, line := range lines {
 		// Change current TBD header to Release Version header
 		if tbdHeaderRegex.Match(line){
 			releaseVersionHeader := fmt.Sprintf("# %s", releaseVersion)
 			newLines[i + 1] = []byte(releaseVersionHeader)
+			i = i + 2
+		} else {
+			newLines[i] = line
+			i++
 		}
-		if i == 0|| i == len(newLines) - 1 {
-			continue
-		}
-		newLines[i + 1] = line
 	}
-	newCLFile := bytes.Join(newLines, []byte("\n"))
-	err = os.WriteFile(changelogFilepath, newCLFile, 0644)
+	newChangelogFile := bytes.Join(newLines, []byte("\n"))
+	err = os.WriteFile(changelogFilepath, newChangelogFile, changelogFileMode)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error attempting to write changelog file to '%s'.", changelogFilepath)
 	}
