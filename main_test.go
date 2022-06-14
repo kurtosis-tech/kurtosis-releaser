@@ -8,41 +8,51 @@ import (
 )
 
 func TestMain_SemverRegex(t *testing.T){
-	semverRegexStr := "^[0-9]+.[0-9]+.[0-9]$"
-	semverRegex := regexp.MustCompile(semverRegexStr)
+	semverRegexStr := "^[0-9]+.[0-9]+.[0-9]+$"
+	
+	validStrings := []string{"0.0.0", "1.26.11234", "0.1.11", "1.2.3"}
+	invalidStrings := []string{" 0.0.0", "1.1", ".5.6", "1.2.", "..", "0.0.0 "}
 
-	validSemverStr := "0.0.0"
-	semverDetected := semverRegex.Match([]byte(validSemverStr))
-
-	require.True(t, semverDetected, "Semver Header was not detected in this string when it should have been: '%s'.", validSemverStr)
+	testRegexPattern(t, "Semver", semverRegexStr, validStrings, invalidStrings)
 }
 
 func TestMain_TBDHeaderRegex(t *testing.T){
 	tbdHeaderRegexStr := "^#\\s*TBD\\s*$"
-	tbdHeaderRegex := regexp.MustCompile(tbdHeaderRegexStr)
+	
+	validStrings := []string{"# TBD", "# TBD  ", "#TBD"}
+	invalidStrings := []string{"## TBD", "# TD "}
 
-	validTBDHeaderStr := "# TBD"
-	tbdHeaderDetected := tbdHeaderRegex.Match([]byte(validTBDHeaderStr))
-
-	require.True(t, tbdHeaderDetected, "TBD Header was not detected in this string when it should have been: '%s'.", validTBDHeaderStr)
+	testRegexPattern(t, "TBD Header", tbdHeaderRegexStr, validStrings, invalidStrings)
 }
 
 func TestMain_VersionHeaderRegex(t *testing.T){
 	versionHeaderRegexStr := "^#\\s*[0-9]+.[0-9]+.[0-9]+\\s*$"
-	versionHeaderRegex := regexp.MustCompile(versionHeaderRegexStr)
 
-	validVersionHeaderStr := "# 1.54.2"
-	versionHeaderDetected := versionHeaderRegex.Match([]byte(validVersionHeaderStr))
+	validStrings := []string{"# 1.54.2", "#1.5.2"}
+	invalidStrings := []string{"## 1.54.2", "1.5.2"}
 
-	require.True(t, versionHeaderDetected, "Version header was not detected in this string when it should have been: '%s'.", validVersionHeaderStr)
+	testRegexPattern(t, "Version Header", versionHeaderRegexStr, validStrings, invalidStrings)
 }
 
-func TestMain_BreakingChangesRegex(t *testing.T){
+func TestMain_BreakingChangesSubheaderRegex(t *testing.T){
 	breakingChangesSubheaderRegexStr := "^###*\\s*[Bb]reak.*$"
-	breakingChangesRegex := regexp.MustCompile(breakingChangesSubheaderRegexStr)
 
-	validBreakingChangesStr := "### Breaking Changes"
-	breakingChangesDetected := breakingChangesRegex.Match([]byte(validBreakingChangesStr))
+	validStrings := []string{"### Breaking Changes", "### breaking changes", "### break", "## Breaking Chages", "###BreakingChanges", "### Break"}
+	invalidStrings := []string{"Breaking Changes", "### Breking Changes", " ## Break"}
 
-	require.True(t, breakingChangesDetected, "Breaking changes was not detected in this string when it should have been: '%s'.", validBreakingChangesStr)
+	testRegexPattern(t, "Breaking Changes Subheader", breakingChangesSubheaderRegexStr, validStrings, invalidStrings)
+}
+
+func testRegexPattern(t *testing.T, regexPatternName string, regexPatternStr string, validStrings []string, invalidStrings []string) {
+	regexPattern := regexp.MustCompile(regexPatternStr)
+
+	for _, str := range(validStrings)  {
+		patternDetected := regexPattern.Match([]byte(str))
+		require.True(t, patternDetected, "%s Pattern was not detected in this string when it should have been: '%s'.", regexPatternName, str)
+	}
+
+	for _, str := range(invalidStrings)  {
+		patternDetected := regexPattern.Match([]byte(str))
+		require.False(t, patternDetected, "%s Pattern was detected in this string when it should not have been: '%s'.", regexPatternName, str)
+	}
 }

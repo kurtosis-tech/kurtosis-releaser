@@ -53,7 +53,7 @@ const (
 	// Taken from guess-release-version.sh
 	expectedNumTBDHeaderLines = 1
 	noPreviousVersion = "0.0.0" 
-	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]$"
+	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]+$"
 	tbdHeaderRegexStr = "^#\\s*TBD\\s*$"
 	versionHeaderRegexStr = "^#\\s*[0-9]+.[0-9]+.[0-9]+\\s*$"
 	breakingChangesSubheaderRegexStr = "^###*\\s*[Bb]reak.*$"
@@ -379,7 +379,6 @@ func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 			if err != nil {
 				return stacktrace.Propagate(err, "An error occurred while retrieving the following tag: %s.", tagName)
 			}
-			fmt.Println(tagName)
 			allTagSemVers = append(allTagSemVers, tagSemVer) 
 		}
 		return nil
