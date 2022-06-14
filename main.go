@@ -54,9 +54,9 @@ const (
 	expectedNumTBDHeaderLines = 1
 	noPreviousVersion = "0.0.0" 
 	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]$"
-	tbdHeaderRegexStr = "^#[[:space:]]*TBD[[:space:]]*$"
-	versionHeaderRegexStr = "^#[[:space:]]*[0-9]+.[0-9]+.[0-9]+[:space:]]*$"
-	breakingChangesSubheaderRegexStr = "^###*[[:space:]]*[Bb]reak.*$"
+	tbdHeaderRegexStr = "^#\\s*TBD\\s*$"
+	versionHeaderRegexStr = "^#\\s*[0-9]+.[0-9]+.[0-9]+\\s*$"
+	breakingChangesSubheaderRegexStr = "^###*\\s*[Bb]reak.*$"
 )
 
 var (
