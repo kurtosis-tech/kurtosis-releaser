@@ -313,25 +313,26 @@ func runMain() error {
 	shouldUndoReleaseTag = false
 	shouldUndoVPrefixedReleaseTag = false
 
-	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName)
-	// releaseTagRefSpec := fmt.Sprintf("%s/%s", tagsPrefix, releaseTag)
+	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName) 
+	releaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", releaseTag, releaseTag) 
 	pushReleaseTagOpts := &git.PushOptions{
 		Auth:       gitAuth,
 		RemoteName: originRemoteName,
-		RefSpecs:   []config.RefSpec{config.RefSpec(tagRefSpec)},
+		RefSpecs:   []config.RefSpec{config.RefSpec(releaseTagRefSpec)},
 	}
 	if 	err = repository.Push(pushReleaseTagOpts); err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'.", releaseTag, remoteMasterBranchName)
 	}
-	// vReleaseTagRefSpec := fmt.Sprintf("%s/%s", tagsPrefix, vReleaseTag)
-	// pushVPrefixedReleaseTagOpts := &git.PushOptions{
-	// 	Auth:       gitAuth,
-	// 	RemoteName: originRemoteName,
-	// 	RefSpecs:   []config.RefSpec{config.RefSpec(vReleaseTagRefSpec)},
-	// }
-	// if 	err = repository.Push(pushVPrefixedReleaseTagOpts); err != nil {
-	// 	logrus.Errorf("An error occurred while pushing release tag: '%s' to '%s'.", vReleaseTag, remoteMasterBranchName, err)
-	// }
+	// Best effort push of the v prefixed tag
+	vReleaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", vReleaseTag, vReleaseTag) 
+	pushVPrefixedReleaseTagOpts := &git.PushOptions{
+		Auth:       gitAuth,
+		RemoteName: originRemoteName,
+		RefSpecs:   []config.RefSpec{config.RefSpec(vReleaseTagRefSpec)},
+	}
+	if 	err = repository.Push(pushVPrefixedReleaseTagOpts); err != nil {
+		logrus.Errorf("An error occurred while pushing release tag: '%s' to '%s'.", vReleaseTag, remoteMasterBranchName, err)
+	}
 
 	shouldWarnAboutUndoingRemotePush = false
 
