@@ -179,21 +179,19 @@ func runMain() error {
 	// Conduct changelog file validation
 	changelogFilepath := path.Join(currentWorkingDirpath, relChangelogFilepath)
 	tbdHeaderCount, err := grepFile(changelogFilepath, tbdHeaderRegex)
-	fmt.Println("tbd header count: %v", tbdHeaderCount)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, tbdHeaderRegex.String())	
 	}
 	if tbdHeaderCount != expectedNumTBDHeaderLines {
 		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.\n", expectedNumTBDHeaderLines, tbdHeaderCount)
 	}
-	// versionHeaderCount, err := grepFile(changelogFilepath, versionHeaderRegex)
-	// fmt.Println("version header count: %v", versionHeaderCount)
-	// if err != nil {
-	// 	return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, versionHeaderRegex.String())	
-	// }
-	// if versionHeaderCount == 0 {
-	// 	return stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
-	// }
+	versionHeaderCount, err := grepFile(changelogFilepath, versionHeaderRegex)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, versionHeaderRegex.String())	
+	}
+	if versionHeaderCount == 0 {
+		return stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
+	}
 	logrus.Infof("Finished prererelease checks.")
 
 	logrus.Infof("Guessing next release version...")
@@ -293,7 +291,7 @@ func runMain() error {
 			// git tag -d
 			err = repository.DeleteTag(vReleaseTag)
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, err)
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, vReleaseTag, err)
 			}
 		}
 	}()
