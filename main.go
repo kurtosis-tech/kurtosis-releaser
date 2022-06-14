@@ -55,7 +55,7 @@ const (
 	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]$"
 	tbdHeaderRegexStr = "^#[[:space:]]*TBD[[:space:]]*$"
 	versionHeaderRegexStr = "^#[[:space:]]*[0-9]+.[0-9]+.[0-9]+[:space:]]*$"
-	breakingChangesSubheaderRegexStr = 	"^###*[[:space:]]*[Bb]reak.*$"
+	breakingChangesSubheaderRegexStr = "^###*[[:space:]]*[Bb]reak.*$"
 )
 
 var (
@@ -141,7 +141,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while determining if we should fetch from '%s'.", lastFetchedFilepath)
 	}
 	if shouldFetch {
-		fetchOpts := &git.FetchOptions{Auth: gitAuth, RemoteName: originRemoteName}
+		fetchOpts := &git.FetchOptions{RemoteName: originRemoteName}
 		if err := originRemote.Fetch(fetchOpts); err != nil && err != git.NoErrAlreadyUpToDate {
 			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
@@ -178,6 +178,7 @@ func runMain() error {
 	// Conduct changelog file validation
 	changelogFilepath := path.Join(currentWorkingDirpath, relChangelogFilepath)
 	tbdHeaderCount, err := grepFile(changelogFilepath, tbdHeaderRegex)
+	fmt.Println("tbd header count: %v", tbdHeaderCount)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, tbdHeaderRegex.String())	
 	}
@@ -185,6 +186,7 @@ func runMain() error {
 		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.\n", expectedNumTBDHeaderLines, tbdHeaderCount)
 	}
 	// versionHeaderCount, err := grepFile(changelogFilepath, versionHeaderRegex)
+	// fmt.Println("version header count: %v", versionHeaderCount)
 	// if err != nil {
 	// 	return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, versionHeaderRegex.String())	
 	// }
@@ -378,6 +380,7 @@ func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 			if err != nil {
 				return stacktrace.Propagate(err, "An error occurred while retrieving the following tag: %s.", tagName)
 			}
+			fmt.Println(tagName)
 			allTagSemVers = append(allTagSemVers, tagSemVer) 
 		}
 		return nil
@@ -469,7 +472,6 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	newLines:= make([][]byte, len(lines) + 2) 
 	// Add a new TBD header for next release
 	newLines[0] = []byte("# TBD")
-	newLines[1] = []byte(" \n")
 	for i, line := range lines {
 		// Change current TBD header to Release Version header
 		if tbdHeaderRegex.Match(line){
