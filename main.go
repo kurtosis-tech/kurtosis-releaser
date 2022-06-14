@@ -52,6 +52,7 @@ const (
 
 	// Taken from guess-release-version.sh
 	expectedNumTBDHeaderLines = 1
+	tbdHeaderStr = "# TBD"
 	noPreviousVersion = "0.0.0" 
 	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]+$"
 	tbdHeaderRegexStr = "^#\\s*TBD\\s*$"
@@ -471,7 +472,7 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	lines := bytes.Split(changelogFile, []byte("\n"))
 	newLines:= make([][]byte, len(lines) + 2) 
 	// Add a new TBD header for next release
-	newLines[0] = []byte("# TBD")
+	newLines[0] = []byte(tbdHeaderStr)
 	i := 1
 	for _, line := range lines {
 		// Change current TBD header to Release Version header
