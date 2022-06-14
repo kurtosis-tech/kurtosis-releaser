@@ -141,7 +141,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while determining if we should fetch from '%s'.", lastFetchedFilepath)
 	}
 	if shouldFetch {
-		fetchOpts := &git.FetchOptions{RemoteName: originRemoteName}
+		fetchOpts := &git.FetchOptions{Auth: gitAuth, RemoteName: originRemoteName}
 		if err := originRemote.Fetch(fetchOpts); err != nil && err != git.NoErrAlreadyUpToDate {
 			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
@@ -439,18 +439,20 @@ func doBreakingChangesExist(changelogFilepath string) (bool, error) {
 
 func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string) error {
 	preReleaseScriptsFilepath := path.Join(preReleaseScriptsDirpath, preReleaseScriptsFilename)
-	preReleaseScriptsFile, err := os.Open(preReleaseScriptsFilepath);
+	preReleaseScriptsFile, err := os.ReadFile(preReleaseScriptsFilepath);
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to open file at provided path. Are you sure '%s' exists?", preReleaseScriptsFilepath)
 	}
-	defer preReleaseScriptsFile.Close()
 
-	scanner := bufio.NewScanner(preReleaseScriptsFile)
+	lines := bytes.Split(preReleaseScriptsFile, []byte("\n"))
 	var allScriptFilepaths []string
-	for scanner.Scan() {
-		allScriptFilepaths = append(allScriptFilepaths, scanner.Text())
+	for _, line := range(lines) {
+		allScriptFilepaths = append(allScriptFilepaths, string(line))
 	}
 	for _, scriptFilepath := range allScriptFilepaths {
+		if strings.TrimSpace(scriptFilepath) == "" {
+			continue
+		}
 		scriptCmdString := path.Join(preReleaseScriptsDirpath, scriptFilepath)
 		scriptCmd := exec.Command(scriptCmdString, releaseVersion)
 		err := scriptCmd.Run()
