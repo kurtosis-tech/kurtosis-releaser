@@ -29,7 +29,7 @@ func TestMain_VersionHeaderRegex(t *testing.T){
 	versionHeaderRegexStr := "^#\\s*[0-9]+.[0-9]+.[0-9]+\\s*$"
 
 	validStrings := []string{"# 1.54.2", "#1.5.2"}
-	invalidStrings := []string{"## 1.54.2", "1.5.2"}
+	invalidStrings := []string{"## 1.54.2", "1.5.2", "# ..", "# 1.52.", "# 1..25", "# 1.52"}
 
 	testRegexPattern(t, "Version Header", versionHeaderRegexStr, validStrings, invalidStrings)
 }
