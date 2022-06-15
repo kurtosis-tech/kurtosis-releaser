@@ -18,7 +18,6 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
@@ -76,18 +75,6 @@ func main() {
 }
 
 func runMain() error {
-	checkArgs("<private key filepath>")
-	privateKeyFilepath := os.Args[1]
-
-	logrus.Infof("Setting up git auth for release...")
-	if 	_, err := os.Stat(privateKeyFilepath); err != nil {
-		return stacktrace.Propagate(err, "An error occurred getting private key file at the following path: '%s'.", privateKeyFilepath)
-	}
-	gitAuth, err := ssh.NewPublicKeysFromFile(gitUsername, privateKeyFilepath, emptyPassword)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred opening public key for authenticating git operations.")
-	}
-
 	logrus.Infof("Starting release process...")
 	currentWorkingDirpath, err := os.Getwd()
 	if err != nil {
@@ -143,7 +130,7 @@ func runMain() error {
 		return stacktrace.Propagate(err, "An error occurred while determining if we should fetch from '%s'.", lastFetchedFilepath)
 	}
 	if shouldFetch {
-		fetchOpts := &git.FetchOptions{Auth: gitAuth, RemoteName: originRemoteName}
+		fetchOpts := &git.FetchOptions{RemoteName: originRemoteName}
 		if err := originRemote.Fetch(fetchOpts); err != nil && err != git.NoErrAlreadyUpToDate {
 			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
@@ -298,7 +285,7 @@ func runMain() error {
 	}()
 
 	logrus.Infof("Pushing release changes to '%s'...", remoteMasterBranchName)
-	pushCommitOpts := &git.PushOptions{Auth: gitAuth, RemoteName: originRemoteName}
+	pushCommitOpts := &git.PushOptions{RemoteName: originRemoteName}
 	if err = repository.Push(pushCommitOpts); err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s'.", remoteMasterBranchName)
 	}
@@ -316,7 +303,6 @@ func runMain() error {
 	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName) 
 	releaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", releaseTag, releaseTag) 
 	pushReleaseTagOpts := &git.PushOptions{
-		Auth:       gitAuth,
 		RemoteName: originRemoteName,
 		RefSpecs:   []config.RefSpec{config.RefSpec(releaseTagRefSpec)},
 	}
@@ -326,7 +312,6 @@ func runMain() error {
 	// Best effort push of the v prefixed tag
 	vReleaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", vReleaseTag, vReleaseTag) 
 	pushVPrefixedReleaseTagOpts := &git.PushOptions{
-		Auth:       gitAuth,
 		RemoteName: originRemoteName,
 		RefSpecs:   []config.RefSpec{config.RefSpec(vReleaseTagRefSpec)},
 	}
@@ -513,11 +498,4 @@ func grepFile(filePath string, regexPat *regexp.Regexp) (int64, error) {
 		return -1, stacktrace.Propagate(err, "An error occurred while scanning file: '%s'.", filePath)
     }
     return numLinesMatchingPattern, nil
-}
-
-func checkArgs(arg ...string){
-	if len(os.Args) < len(arg)+1 {
-		logrus.Infof("Usage: %s %s", os.Args[0], strings.Join(arg, " "))
-		os.Exit(1)
-	}
 }
