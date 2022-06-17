@@ -442,7 +442,7 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string
 		scriptCmd := exec.Command(scriptCmdString, releaseVersion)
 		err := scriptCmd.Run()
 		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred attempting to run the following pre release script command: '%s'", scriptCmdString)
+			return stacktrace.Propagate(err, "An error occurred attempting to run the following pre release script command: '%s %s'", scriptCmdString, releaseVersion)
 		}
 	}
 
