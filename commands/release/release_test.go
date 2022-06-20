@@ -1,4 +1,4 @@
-package main
+package release
 
 import (
 	"regexp"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain_SemverRegex(t *testing.T){
+func TestRelease_SemverRegex(t *testing.T){
 	semverRegexStr := "^[0-9]+.[0-9]+.[0-9]+$"
 	
 	validStrings := []string{"0.0.0", "1.26.11234", "0.1.11", "1.2.3"}
@@ -16,7 +16,7 @@ func TestMain_SemverRegex(t *testing.T){
 	testRegexPattern(t, "Semver", semverRegexStr, validStrings, invalidStrings)
 }
 
-func TestMain_TBDHeaderRegex(t *testing.T){
+func TestRelease_TBDHeaderRegex(t *testing.T){
 	tbdHeaderRegexStr := "^#\\s*TBD\\s*$"
 	
 	validStrings := []string{"# TBD", "# TBD  ", "#TBD"}
@@ -25,7 +25,7 @@ func TestMain_TBDHeaderRegex(t *testing.T){
 	testRegexPattern(t, "TBD Header", tbdHeaderRegexStr, validStrings, invalidStrings)
 }
 
-func TestMain_VersionHeaderRegex(t *testing.T){
+func TestRelease_VersionHeaderRegex(t *testing.T){
 	versionHeaderRegexStr := "^#\\s*[0-9]+.[0-9]+.[0-9]+\\s*$"
 
 	validStrings := []string{"# 1.54.2", "#1.5.2"}
@@ -34,7 +34,7 @@ func TestMain_VersionHeaderRegex(t *testing.T){
 	testRegexPattern(t, "Version Header", versionHeaderRegexStr, validStrings, invalidStrings)
 }
 
-func TestMain_BreakingChangesSubheaderRegex(t *testing.T){
+func TestRelease_BreakingChangesSubheaderRegex(t *testing.T){
 	breakingChangesSubheaderRegexStr := "^###*\\s*[Bb]reak.*$"
 
 	validStrings := []string{"### Breaking Changes", "### breaking changes", "### break", "## Breaking Chages", "###BreakingChanges", "### Break"}
