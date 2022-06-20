@@ -1,15 +1,18 @@
 package getdockertag
 
 import (
+	"fmt"
 	"github.com/Masterminds/semver/v3"
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/spf13/cobra"
 	"github.com/kurtosis-tech/stacktrace"
-	"github.com/sirupsen/logrus"	
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+	"os"
+	"path"
 	"regexp"
+	"sort"
+	"strings"
 )
 
 const (
@@ -19,6 +22,7 @@ const (
 	masterBranchName = "master"
 
 	tagsPrefix = "refs/tags/"
+	headRef = "refs/heads/"
 	dirtySuffix = "-dirty"
 	getDockerTagCmdStr = "get-docker-tag"
 	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]+$"
@@ -47,33 +51,17 @@ func run(cmd *cobra.Command, args []string) error {
 			return stacktrace.Propagate(err, "An error occurred getting the git repository in this directory. This means that this binary is not being run from root of a git repository.")
 		}
 	}
-
 	repository, err := git.PlainOpen(currentWorkingDirpath)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to open the existing git repository.")
 	}
-	globalRepoConfig, err := repository.ConfigScoped(config.GlobalScope)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while attempting to retrieve the global git config for this repo.")
-	}
-	name := globalRepoConfig.User.Name
-	email := globalRepoConfig.User.Email
-	if name == "" || email == "" {
-		return stacktrace.NewError("The following empty name or email were detected in global git config: 'name: %s', 'email: %s'. Make sure these are set for annotating release commits.", name, email)
-	}
-	originRemote, err := repository.Remote(originRemoteName)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
-	}
 
-	logrus.Infof("Conducting pre release checks...")
+	// Determines if working tree is clean
+	appendDirtySuffix := false
 	worktree, err := repository.Worktree()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
 	}
-
-	appendDirtySuffix := false
-	// Check no staged or unstaged changes exist on the branch before release
 	currWorktreeStatus, err := worktree.Status()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the status of the worktree of the repository.")
@@ -82,11 +70,13 @@ func run(cmd *cobra.Command, args []string) error {
 	if !isClean {
 		appendDirtySuffix = true
 	}
-	
+
+	// Get the latest tag in the repo, if it exists
 	tagrefs, err := repository.Tags()
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "An error occurred while retrieving tags for repository.")
+		return stacktrace.Propagate(err, "An error occurred while retrieving tags for repository.")
 	}
+	var allTagSemVers []*semver.Version
 	err = tagrefs.ForEach(func(tagref *plumbing.Reference) error {
 		tagName := tagref.Name().String()
 		tagName = strings.ReplaceAll(tagName, tagsPrefix, "")
@@ -104,19 +94,34 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Get latest tag if it exists
-	gitRef := nil
+	// Get latest tag, if it exists
+	gitRef := ""
 	if len(allTagSemVers) > 0 {
 		sort.Sort(sort.Reverse(semver.Collection(allTagSemVers)))
 		gitRef = allTagSemVers[0].String()
 	}
 
-	// If tag doesn't exist, get branch name
-	if gitRef := nil {
-
+	// If no tags exist, get branch name
+	if gitRef == "" {
+		head, err := repository.Head()
+		if err != nil {
+			return stacktrace.Propagate(err, "An error occurred while attempting to get the ref to HEAD of the local repository.")
+		}
+		branchRefStr := head.Name().String()
+		branchName := strings.ReplaceAll(branchRefStr, headRef, "")
+		gitRef = branchName
 	}
 
-	// Trim tagrefs and filter for only tags with X.Y.Z version format
+	// add dirty if needed
+	if appendDirtySuffix {
+		gitRef = fmt.Sprintf("%s%s", gitRef, dirtySuffix)
+	}
 
+	// Sanitize gitref for docker tag by replacing all ':' or '/' characters with '_'
+	gitRef = strings.ReplaceAll(gitRef, ":", "_")
+	gitRef = strings.ReplaceAll(gitRef, "/", "_")
+
+	dockerTag := gitRef
+	logrus.Infof(dockerTag)
 	return nil
 }

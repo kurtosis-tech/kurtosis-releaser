@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/kurtosis-tech/kurtosis-releaser/commands/get-docker-tag"
 	"github.com/kurtosis-tech/kurtosis-releaser/commands/release"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"	
@@ -35,6 +36,7 @@ func init(){
 	)
 
 	RootCmd.AddCommand(release.ReleaseCmd)
+	RootCmd.AddCommand(getdockertag.GetDockerTagCmd)
 }
 
 // ====================================================================================================
