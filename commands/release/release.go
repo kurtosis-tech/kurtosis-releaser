@@ -28,7 +28,6 @@ const (
 	gitUsername = "git"
 	originRemoteName = "origin"
 	masterBranchName = "master"
-	emptyPassword = ""
 
 	preReleaseScriptsFilename = ".pre-release-scripts.txt"
 	relScriptsDirpath = "scripts"
