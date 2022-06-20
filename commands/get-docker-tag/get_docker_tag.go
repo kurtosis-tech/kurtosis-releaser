@@ -71,30 +71,92 @@ func run(cmd *cobra.Command, args []string) error {
 		appendDirtySuffix = true
 	}
 
-	// Get the latest tag in the repo, if it exists
-	tagrefs, err := repository.Tags()
+	head, err := repository.Head()
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while retrieving tags for repository.")
+		return stacktrace.Propagate(err, "An error occurred while attempting to get the ref to HEAD of the local repository.")
 	}
-	var allTagSemVers []*semver.Version
-	err = tagrefs.ForEach(func(tagref *plumbing.Reference) error {
-		tagName := tagref.Name().String()
-		tagName = strings.ReplaceAll(tagName, tagsPrefix, "")
 
-		if semverRegex.Match([]byte(tagName)) {
-			tagSemVer, err := semver.StrictNewVersion(tagName)
-			if err != nil {
-				return stacktrace.Propagate(err, "An error occurred while retrieving the following tag: %s.", tagName)
-			}
-			allTagSemVers = append(allTagSemVers, tagSemVer) 
-		}
-		return nil
+	// Get the latest tag in the repo, if it exists
+	// tagrefs, err := repository.Tags()
+	// if err != nil {
+	// 	return stacktrace.Propagate(err, "An error occurred while retrieving tags for repository.")
+	// }
+	// var allTagSemVers []*semver.Version
+	// err = tagrefs.ForEach(func(tagref *plumbing.Reference) error {
+	// 	tagName := tagref.Name().String()
+	// 	tagName = strings.ReplaceAll(tagName, tagsPrefix, "")
+
+	// 	if semverRegex.Match([]byte(tagName)) {
+	// 		tagSemVer, err := semver.StrictNewVersion(tagName)
+	// 		if err != nil {
+	// 			return stacktrace.Propagate(err, "An error occurred while retrieving the following tag: %s.", tagName)
+	// 		}
+	// 		allTagSemVers = append(allTagSemVers, tagSemVer) 
+	// 	}
+	// 	return nil
+	// })
+	// if err != nil {
+	// 	return err
+	// }
+
+	cIter, err := repository.Log(&git.LogOptions{
+		From: head.Hash(),
+		Order: git.LogOrderCommitterTime,
 	})
 	if err != nil {
-		return err
+		return stacktrace.Propagate(err, "An error occurred attempting to get commit logs of repository starting from %s.", head)
 	}
+	var tag *plumbing.Reference
+	err = cIter.ForEach(func(c *object.Commit) error {
+		tags, err := repository.Tags()
+		if err != nil {
+			return stacktrace.Propagate(err, "An error occurred attempting to get tags on this repository.")
+		}
+	})
 
-	// Get latest tag, if it exists
+	// // Opening the repo
+	// cwd , err := filepath.Abs(".")
+	// PanicIfError(err)
+	// r, err := git.PlainOpen(cwd)
+	// PanicIfError(err)
+
+	// // Head
+	// head, err := r.Head()
+	// PanicIfError(err)
+	// cIter, err := r.Log(&git.LogOptions{
+	// 	From: head.Hash(),
+	// 	Order: git.LogOrderCommitterTime,
+	// })
+
+	// var tag *plumbing.Reference
+	// err = cIter.ForEach(func(c *object.Commit) error {
+	// 	// Tags
+	// 	tags, err := r.Tags()
+	// 	PanicIfError(err)
+
+	// 	err = tags.ForEach(func(t *plumbing.Reference) error {
+
+	// 		t_hash := t.Hash()
+	// 		fmt.Printf("%v - %v\n", c.Hash, t_hash)
+
+	// 		if bytes.Equal(c.Hash[:] ,t_hash[:]) {
+	// 			// Found!
+	// 			tag = t;
+	// 			return storer.ErrStop
+	// 		}
+	// 		// No luck continue searching.
+	// 		return nil
+	// 	})
+	// 	if tag != nil {
+	// 		// Found
+	// 		return storer.ErrStop
+	// 	}
+	// 	// Not found!
+	// 	return nil
+	// })
+	// PanicIfError(err)
+
+	// Get latest tag if it exists
 	gitRef := ""
 	if len(allTagSemVers) > 0 {
 		sort.Sort(sort.Reverse(semver.Collection(allTagSemVers)))
@@ -103,10 +165,6 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// If no tags exist, get branch name
 	if gitRef == "" {
-		head, err := repository.Head()
-		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred while attempting to get the ref to HEAD of the local repository.")
-		}
 		branchRefStr := head.Name().String()
 		branchName := strings.ReplaceAll(branchRefStr, headRef, "")
 		gitRef = branchName
