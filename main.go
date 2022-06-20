@@ -25,13 +25,10 @@ import (
 
 const (
 	gitDirname = ".git"
-	gitUsername = "git"
 	originRemoteName = "origin"
 	masterBranchName = "master"
-	emptyPassword = ""
 
 	preReleaseScriptsFilename = ".pre-release-scripts.txt"
-	relScriptsDirpath = "scripts"
 
 	tagsPrefix = "refs/tags/"
 	tagRefSpec = "refs/tags/*:refs/tags/*"
@@ -51,15 +48,17 @@ const (
 
 	// Taken from guess-release-version.sh
 	expectedNumTBDHeaderLines = 1
-	tbdHeaderStr = "# TBD"
+	tbdStr = "TBD"
+	hashStr = "#"
 	noPreviousVersion = "0.0.0" 
 	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]+$"
-	tbdHeaderRegexStr = "^#\\s*TBD\\s*$"
-	versionHeaderRegexStr = "^#\\s*[0-9]+.[0-9]+.[0-9]+\\s*$"
-	breakingChangesSubheaderRegexStr = "^###*\\s*[Bb]reak.*$"
 )
 
 var (
+	tbdHeaderStr = fmt.Sprintf("%s %s", hashStr, tbdStr)
+	tbdHeaderRegexStr = fmt.Sprintf("^%s\\s*%s\\s*$", hashStr, tbdStr)
+	versionHeaderRegexStr = fmt.Sprintf("^%s\\s*[0-9]+.[0-9]+.[0-9]+\\s*$", hashStr)
+	breakingChangesSubheaderRegexStr = fmt.Sprintf("^%s%s%s*\\s*[Bb]reak.*$", hashStr, hashStr, hashStr)
 	semverRegex = regexp.MustCompile(semverRegexStr)
 	tbdHeaderRegex = regexp.MustCompile(tbdHeaderRegexStr)
 	versionHeaderRegex = regexp.MustCompile(versionHeaderRegexStr)
@@ -154,7 +153,7 @@ func runMain() error {
 	}
 	isLocalMasterInSyncWithRemoteMaster := localMasterHash.String() == remoteMasterHash.String()
 	if !isLocalMasterInSyncWithRemoteMaster {
-		return stacktrace.NewError("The %s branch is not in sync with the %s branch. Must be in sync to conduct release process.", masterBranchName, originRemoteName)
+		return stacktrace.NewError("The local '%s' branch is not in sync with the '%s' '%s' branch. Must be in sync to conduct release process.", masterBranchName, originRemoteName, masterBranchName)
 	}
 
 	logrus.Infof("Checking out %s branch...", masterBranchName)
@@ -166,14 +165,14 @@ func runMain() error {
 	
 	// Conduct changelog file validation
 	changelogFilepath := path.Join(currentWorkingDirpath, relChangelogFilepath)
-	tbdHeaderCount, err := grepFile(changelogFilepath, tbdHeaderRegex)
+	tbdHeaderCount, err := countLinesMatchingRegex(changelogFilepath, tbdHeaderRegex)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, tbdHeaderRegex.String())	
+		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, tbdHeaderRegex.String())	
 	}
 	if tbdHeaderCount != expectedNumTBDHeaderLines {
-		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.\n", expectedNumTBDHeaderLines, tbdHeaderCount)
+		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.", expectedNumTBDHeaderLines, tbdHeaderCount)
 	}
-	versionHeaderCount, err := grepFile(changelogFilepath, versionHeaderRegex)
+	versionHeaderCount, err := countLinesMatchingRegex(changelogFilepath, versionHeaderRegex)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, versionHeaderRegex.String())	
 	}
@@ -187,12 +186,12 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the latest release version.")
 	}
-	existsBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
+	hasBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist.")
 	}
 	var nextReleaseVersion semver.Version
-	if existsBreakingChanges {
+	if hasBreakingChanges {
 		nextReleaseVersion = latestReleaseVersion.IncMinor()
 	} else {
 		nextReleaseVersion = latestReleaseVersion.IncPatch()
@@ -216,8 +215,7 @@ func runMain() error {
 	}()
 
 	logrus.Infof("Running prerelease scripts...")
-	preReleaseScriptsDirpath := path.Join(currentWorkingDirpath, relScriptsDirpath)
-	err = runPreReleaseScripts(preReleaseScriptsDirpath, nextReleaseVersion.String())
+	err = runPreReleaseScripts(currentWorkingDirpath, nextReleaseVersion.String())
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while running prerelease scripts.")
 	}
@@ -263,7 +261,7 @@ func runMain() error {
 			// git tag -d
 			err = repository.DeleteTag(releaseTag)
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", releaseTag, err)
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo creation of tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", releaseTag, err)
 			}
 		}
 	}()
@@ -279,7 +277,7 @@ func runMain() error {
 			// git tag -d
 			err = repository.DeleteTag(vReleaseTag)
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, vReleaseTag, err)
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo creationg of tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, vReleaseTag, err)
 			}
 		}
 	}()
@@ -306,7 +304,7 @@ func runMain() error {
 		RemoteName: originRemoteName,
 		RefSpecs:   []config.RefSpec{config.RefSpec(releaseTagRefSpec)},
 	}
-	if 	err = repository.Push(pushReleaseTagOpts); err != nil {
+	if err = repository.Push(pushReleaseTagOpts); err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'.", releaseTag, remoteMasterBranchName)
 	}
 	// Best effort push of the v prefixed tag
@@ -329,10 +327,10 @@ func determineShouldFetch(lastFetchedFilepath string) (bool, error) {
 	lastFetchedUnixTimeStr, err := os.ReadFile(lastFetchedFilepath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			logrus.Errorf("An error occurred opening the file to determine fetching at '%s'..", lastFetchedFilepath, err)
+			logrus.Infof("An error occurred opening the file containing the last-fetched timestamp at '%s'", lastFetchedFilepath, err)
 			return true, nil
 		}
-		return false, stacktrace.Propagate(err, "An error occurred reading the file to determine fetching:'%s'.", lastFetchedFilepath)
+		return false, stacktrace.Propagate(err, "An error occurred reading the file to determine fetching '%s'", lastFetchedFilepath)
 	}
 
 	lastFetchedUnixTime, err := strconv.ParseUint(
@@ -341,7 +339,7 @@ func determineShouldFetch(lastFetchedFilepath string) (bool, error) {
 		lastFetchedTimestampUintParseBits,
 	)
 	if err != nil {
-		return false, stacktrace.Propagate(err, "An error occurred parsing last-fetch Unix time string: '%v'.", lastFetchedUnixTimeStr)
+		return false, stacktrace.Propagate(err, "An error occurred parsing last-fetch Unix time string '%v'", lastFetchedUnixTimeStr)
 	}
 	lastFetchedTime := time.Unix(int64(lastFetchedUnixTime), extraNanosecondsToAddToLastFetchedTimestamp)
 	noFetchNeededBefore := lastFetchedTime.Add(fetchGracePeriod)
@@ -364,14 +362,14 @@ func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 		if semverRegex.Match([]byte(tagName)) {
 			tagSemVer, err := semver.StrictNewVersion(tagName)
 			if err != nil {
-				return stacktrace.Propagate(err, "An error occurred while retrieving the following tag: %s.", tagName)
+				return stacktrace.Propagate(err, "An error occurred parsing '%s' tag into a semver object.", tagName)
 			}
 			allTagSemVers = append(allTagSemVers, tagSemVer) 
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, stacktrace.Propagate(err, "An error occurred while iterating through tagrefs in the repository.")
 	}
 
 	var latestReleaseTagSemVer *semver.Version
@@ -416,7 +414,7 @@ func doBreakingChangesExist(changelogFilepath string) (bool, error) {
 		}
 	}
     if err := scanner.Err(); err != nil {
-		return false, stacktrace.Propagate(err, "An error occurred while scanning for the breaking changes header in the changelog file at provided path: '%s'.\n", changelogFilepath)
+		return false, stacktrace.Propagate(err, "An error occurred while scanning for the breaking changes header in the changelog file at provided path: '%s'", changelogFilepath)
     }
 
     return foundBreakingChanges, nil
@@ -452,7 +450,7 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string
 func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	changelogFile, err := os.ReadFile(changelogFilepath)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
+		return stacktrace.Propagate(err, "An error occurred attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
 
 	lines := bytes.Split(changelogFile, []byte("\n"))
@@ -474,14 +472,14 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	newChangelogFile := bytes.Join(newLines, []byte("\n"))
 	err = os.WriteFile(changelogFilepath, newChangelogFile, changelogFileMode)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error attempting to write changelog file to '%s'.", changelogFilepath)
+		return stacktrace.Propagate(err, "An error ocurred attempting to write changelog file to '%s'.", changelogFilepath)
 	}
 
 	return nil
 }
 
 // adapted from: https://stackoverflow.com/questions/26709971/could-this-be-more-efficient-in-go
-func grepFile(filePath string, regexPat *regexp.Regexp) (int64, error) {
+func countLinesMatchingRegex(filePath string, regexPat *regexp.Regexp) (int64, error) {
     numLinesMatchingPattern := int64(0)
     file, err := os.Open(filePath)
     if err != nil {
