@@ -96,7 +96,7 @@ func runMain() error {
 	name := globalRepoConfig.User.Name
 	email := globalRepoConfig.User.Email
 	if name == "" || email == "" {
-		return stacktrace.NewError("The following empty name or email were detected in global git config: 'name: %s', 'email: %s'. Make sure these are set for annotating release commits.", name, email)
+		return stacktrace.NewError("The following empty name or email were detected in global git config'name: %s', 'email: %s'. Make sure these are set for annotating release commits.", name, email)
 	}
 	originRemote, err := repository.Remote(originRemoteName)
 	if err != nil {
@@ -124,7 +124,7 @@ func runMain() error {
 	lastFetchedFilepath := path.Join(gitDirpath, lastFetchedFilename)
 	shouldFetch, err := determineShouldFetch(lastFetchedFilepath)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while determining if we should fetch from '%s'.", lastFetchedFilepath)
+		return stacktrace.Propagate(err, "An error occurred while determining if we should fetch from '%s'", lastFetchedFilepath)
 	}
 	if shouldFetch {
 		fetchOpts := &git.FetchOptions{RemoteName: originRemoteName}
@@ -133,7 +133,7 @@ func runMain() error {
 		}
 		currentUnixTimeStr := fmt.Sprint(time.Now().Unix())
 		if err := os.WriteFile(lastFetchedFilepath, []byte(currentUnixTimeStr), lastFetchedFileMode); err != nil {
-			return stacktrace.Propagate(err, "An error occurred writing last-fetched timestamp '%v' to file '%v'.", currentUnixTimeStr, lastFetchedFilepath)
+			return stacktrace.Propagate(err, "An error occurred writing last-fetched timestamp '%v' to file '%v'", currentUnixTimeStr, lastFetchedFilepath)
 		}
 	}
 
@@ -172,7 +172,7 @@ func runMain() error {
 	}
 	versionHeaderCount, err := countLinesMatchingRegex(changelogFilepath, versionHeaderRegex)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex: '%s'.", changelogFilepath, versionHeaderRegex.String())	
+		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, versionHeaderRegex.String())	
 	}
 	if versionHeaderCount == 0 {
 		return stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
@@ -251,7 +251,7 @@ func runMain() error {
 		Message: releaseTag,
 	})
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while attempting to create this git tag for the next release version: %s.", releaseTag)
+		return stacktrace.Propagate(err, "An error occurred while attempting to create this git tag for the next release version '%s'", releaseTag)
 	}
 	shouldDeleteLocalReleaseTag := true
 	defer func() {
@@ -267,7 +267,7 @@ func runMain() error {
 		Message: vReleaseTag,
 	})
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while attempting to create this git tag for the next release version: %s.", vReleaseTag)
+		return stacktrace.Propagate(err, "An error occurred while attempting to create this git tag for the next release version '%s'", vReleaseTag)
 	}
 	shouldDeleteLocalVPrefixedReleaseTag := true
 	defer func() {
@@ -308,12 +308,12 @@ func runMain() error {
 	logrus.Infof("Pushing release changes to '%s'...", remoteMasterBranchName)
 	pushCommitOpts := &git.PushOptions{RemoteName: originRemoteName}
 	if err = repository.Push(pushCommitOpts); err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s'.", remoteMasterBranchName)
+		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s'", remoteMasterBranchName)
 	}
 	shouldWarnAboutUndoingRemotePush := true
 	defer func() {
 		if shouldWarnAboutUndoingRemotePush {
-			logrus.Errorf("ACTION REQUIRED: An error occurred meaning we need to undo our push-to-%s, but this is a dangerous operation for its risk that it will destroy history on the remote so you'll need to do this manually. Follow this tutorial: 'LINK TO INSTRUCTIONS TO UNDO PUSH.'", originRemoteName, err)
+			logrus.Errorf("ACTION REQUIRED: An error occurred meaning we need to undo our push to '%s', but this is a dangerous operation for its risk that it will destroy history on the remote so you'll need to do this manually. Follow this tutorial: 'LINK TO INSTRUCTIONS TO UNDO PUSH.'", originRemoteName, err)
 		}
 	}()
 
@@ -324,7 +324,7 @@ func runMain() error {
 		RefSpecs:   []config.RefSpec{config.RefSpec(releaseTagRefSpec)},
 	}
 	if err = repository.Push(pushReleaseTagOpts); err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'.", releaseTag, remoteMasterBranchName)
+		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'", releaseTag, remoteMasterBranchName)
 	}
 
 	shouldResetLocalBranch = false
@@ -428,7 +428,7 @@ func doBreakingChangesExist(changelogFilepath string) (bool, error) {
 		}
 	}
     if err := scanner.Err(); err != nil {
-		return false, stacktrace.Propagate(err, "An error occurred while scanning for the breaking changes header in the changelog file at provided path: '%s'", changelogFilepath)
+		return false, stacktrace.Propagate(err, "An error occurred while scanning for the breaking changes header in the changelog file at provided path '%s'", changelogFilepath)
     }
 
     return foundBreakingChanges, nil
@@ -467,32 +467,43 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
-	changelogFileInfo, err := os.Stat(changelogFilepath)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred attempting to retrieve the FileInfo for the changelog file at provided path '%s'", changelogFilepath)
-	}
-	changelogFileMode := changelogFileInfo.Mode()
-
 	lines := bytes.Split(changelogFile, []byte("\n"))
-	newLines:= make([][]byte, len(lines) + 2) 
-	// Add a new TBD header for next release
-	newLines[0] = []byte(versionToBeReleasedPlaceholderHeaderStr)
-	i := 1
-	for _, line := range lines {
-		// Change current TBD header to Release Version header
-		if versionToBeReleasedPlaceholderHeaderRegex.Match(line){
-			releaseVersionHeader := fmt.Sprintf("%s %s", sectionHeaderPrefix, releaseVersion)
-			newLines[i + 1] = []byte(releaseVersionHeader)
-			i = i + 2
-		} else {
-			newLines[i] = line
-			i++
-		}
+	emptyLine := []byte("\n")
+
+	// Check that first line contains version to be released placeholder header
+	if !versionToBeReleasedPlaceholderHeaderRegex.Match(lines[0]) {
+		return stacktrace.NewError("No '%s' found in the first line of the changelog. Check the changelog at '%s' is in the correct format.", versionToBeReleasedPlaceholderHeaderStr, changelogFilepath)
 	}
-	newChangelogFile := bytes.Join(newLines, []byte("\n"))
-	err = os.WriteFile(changelogFilepath, newChangelogFile, changelogFileMode)
+	// Create new update changelog file
+	updatedChangelogFile, err := os.Create(changelogFilepath)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error ocurred attempting to write changelog file to '%s'.", changelogFilepath)
+		return stacktrace.Propagate(err, "An error occurred attempting to create the updated changelog file at '%s'", changelogFilepath)
+	}
+	// Write version to be released placeholder header as the first line
+	_, err = updatedChangelogFile.Write([]byte(string(lines[0]) + "\n"))
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred attempting to write '%s' to the updated changelog file at '%s'", versionToBeReleasedPlaceholderHeaderStr, changelogFilepath)
+	}
+	// Write an empty line
+	_, err = updatedChangelogFile.Write(emptyLine)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred attempting to write empty line to the updated changelog file at '%s'", versionToBeReleasedPlaceholderHeaderStr, changelogFilepath)
+	}
+	// Write the new version header
+	releaseVersionHeader := fmt.Sprintf("%s %s", sectionHeaderPrefix, releaseVersion)
+	_, err = updatedChangelogFile.Write([]byte(releaseVersionHeader))
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred attempting to write '%s' to the updated changelog file at '%s'", versionToBeReleasedPlaceholderHeaderStr, changelogFilepath)
+	}
+	// Write another empty line
+	_, err = updatedChangelogFile.Write(emptyLine)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred attempting to write an empty line after the new version header to the updated changelog file at '%s'", versionToBeReleasedPlaceholderHeaderStr, changelogFilepath)
+	}
+	// Write the rest of the lines
+	_, err = updatedChangelogFile.Write(bytes.Join(lines[1:], []byte("\n")))
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred attempting to append existing the existing changelog file contents to the updated changelog file at '%s':\n", changelogFilepath)
 	}
 
 	return nil
