@@ -195,7 +195,7 @@ func runMain() error {
 	}
 	hasBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist.")
+		return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist in the changelog at '%s'", changelogFilepath)
 	}
 	var nextReleaseVersion semver.Version
 	if hasBreakingChanges {
@@ -230,7 +230,7 @@ func runMain() error {
 	logrus.Infof("Updating the changelog...")
 	err = updateChangelog(changelogFilepath, nextReleaseVersion.String())
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while updating the changelog.")
+		return stacktrace.Propagate(err, "An error occurred while updating the changelog file at '%s'", changelogFilepath)
 	}
 
 	logrus.Infof("Committing changes locally...")
@@ -325,8 +325,6 @@ func runMain() error {
 		}
 	}()
 
-	return stacktrace.NewError("induce error")
-
 	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName) 
 	releaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", releaseTag, releaseTag) 
 	pushReleaseTagOpts := &git.PushOptions{
@@ -411,13 +409,20 @@ func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 }
 
 func doBreakingChangesExist(changelogFilepath string) (bool, error) {
-	changelogFile, err := os.Open(changelogFilepath)
+	changelogFile, err := os.ReadFile(changelogFilepath)
 	if err != nil {
-		return false, stacktrace.Propagate(err, "An error occurred attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
+		return false, stacktrace.Propagate(err, "An error occurred attempting to read changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
-	defer changelogFile.Close()
+	foundBreakingChanges, err := doBreakingChangesExistHelper(changelogFile)
+	if err != nil {
+		// Bubble up the stacktrace err
+		return false, err
+	}
+    return foundBreakingChanges, nil
+}
 
-    scanner := bufio.NewScanner(changelogFile)
+func doBreakingChangesExistHelper(changelogFile []byte) (bool, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(changelogFile))
 	// Find TBD header
     for scanner.Scan() {
 		if versionToBeReleasedPlaceholderHeaderRegex.Match(scanner.Bytes()) {
@@ -425,7 +430,7 @@ func doBreakingChangesExist(changelogFilepath string) (bool, error) {
 		}
     }
 	if err := scanner.Err(); err != nil {
-        return false, stacktrace.Propagate(err, "An error occurred while scanning for the '%s' header in the changelog file at provided path '%s'", versionToBeReleasedPlaceholderStr, changelogFilepath)
+        return false, stacktrace.Propagate(err, "An error occurred while scanning the bytes of the changelog file for the '%s' header.", versionToBeReleasedPlaceholderStr)
     }
 	// Scan file until next version header detected, searching for Breaking Changes header along the way
 	foundBreakingChanges := false
@@ -438,10 +443,9 @@ func doBreakingChangesExist(changelogFilepath string) (bool, error) {
 		}
 	}
     if err := scanner.Err(); err != nil {
-		return false, stacktrace.Propagate(err, "An error occurred while scanning for the breaking changes header in the changelog file at provided path '%s'", changelogFilepath)
+		return false, stacktrace.Propagate(err, "An error occurred while scanning the bytes of the changelog file for the Breaking Changes Subheader.")
     }
-
-    return foundBreakingChanges, nil
+	return foundBreakingChanges, nil
 }
 
 func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string) error {
