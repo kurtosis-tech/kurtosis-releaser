@@ -44,7 +44,6 @@ const (
 	lastFetchedFileMode = 0644
 
 	relChangelogFilepath = "docs/changelog.md"
-	changelogFileMode = 0644
 
 	// Taken from guess-release-version.sh
 	expectedNumTBDHeaderLines = 1
@@ -452,6 +451,11 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to open changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
+	changelogFileInfo, err := os.Stat(changelogFilepath)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred attempting to retrieve the FileInfo for the changelog file at provided path '%s'", changelogFilepath)
+	}
+	changelogFileMode := changelogFileInfo.Mode()
 
 	lines := bytes.Split(changelogFile, []byte("\n"))
 	newLines:= make([][]byte, len(lines) + 2) 
