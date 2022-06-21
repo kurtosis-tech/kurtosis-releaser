@@ -45,21 +45,20 @@ const (
 
 	relChangelogFilepath = "docs/changelog.md"
 
-	// Taken from guess-release-version.sh
 	expectedNumTBDHeaderLines = 1
-	tbdStr = "TBD"
-	hashStr = "#"
+	versionToBeReleasedPlaceholderStr = "TBD"
+	sectionHeaderPrefix = "#"
 	noPreviousVersion = "0.0.0" 
 	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]+$"
 )
 
 var (
-	tbdHeaderStr = fmt.Sprintf("%s %s", hashStr, tbdStr)
-	tbdHeaderRegexStr = fmt.Sprintf("^%s\\s*%s\\s*$", hashStr, tbdStr)
-	versionHeaderRegexStr = fmt.Sprintf("^%s\\s*[0-9]+.[0-9]+.[0-9]+\\s*$", hashStr)
-	breakingChangesSubheaderRegexStr = fmt.Sprintf("^%s%s%s*\\s*[Bb]reak.*$", hashStr, hashStr, hashStr)
+	versionToBeReleasedPlaceholderHeaderStr = fmt.Sprintf("%s %s", sectionHeaderPrefix, versionToBeReleasedPlaceholderStr)
+	versionToBeReleasedPlaceholderHeaderRegexStr = fmt.Sprintf("^%s\\s*%s\\s*$", sectionHeaderPrefix, versionToBeReleasedPlaceholderStr)
+	versionHeaderRegexStr = fmt.Sprintf("^%s\\s*[0-9]+.[0-9]+.[0-9]+\\s*$", sectionHeaderPrefix)
+	breakingChangesSubheaderRegexStr = fmt.Sprintf("^%s%s%s*\\s*[Bb]reak.*$", sectionHeaderPrefix, sectionHeaderPrefix, sectionHeaderPrefix)
 	semverRegex = regexp.MustCompile(semverRegexStr)
-	tbdHeaderRegex = regexp.MustCompile(tbdHeaderRegexStr)
+	versionToBeReleasedPlaceholderHeaderRegex = regexp.MustCompile(versionToBeReleasedPlaceholderHeaderRegexStr)
 	versionHeaderRegex = regexp.MustCompile(versionHeaderRegexStr)
 	breakingChangesRegex = regexp.MustCompile(breakingChangesSubheaderRegexStr)
 )
@@ -164,9 +163,9 @@ func runMain() error {
 	
 	// Conduct changelog file validation
 	changelogFilepath := path.Join(currentWorkingDirpath, relChangelogFilepath)
-	tbdHeaderCount, err := countLinesMatchingRegex(changelogFilepath, tbdHeaderRegex)
+	tbdHeaderCount, err := countLinesMatchingRegex(changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, tbdHeaderRegex.String())	
+		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex.String())	
 	}
 	if tbdHeaderCount != expectedNumTBDHeaderLines {
 		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.", expectedNumTBDHeaderLines, tbdHeaderCount)
@@ -395,12 +394,12 @@ func doBreakingChangesExist(changelogFilepath string) (bool, error) {
     scanner := bufio.NewScanner(changelogFile)
 	// Find TBD header
     for scanner.Scan() {
-		if tbdHeaderRegex.Match(scanner.Bytes()) {
+		if versionToBeReleasedPlaceholderHeaderRegex.Match(scanner.Bytes()) {
 			break
 		}
     }
 	if err := scanner.Err(); err != nil {
-        return false, stacktrace.Propagate(err, "An error occurred while scanning for the TBD header in the changelog file at provided path: '%s'.\n", changelogFilepath)
+        return false, stacktrace.Propagate(err, "An error occurred while scanning for the '%s' header in the changelog file at provided path '%s'", versionToBeReleasedPlaceholderStr, changelogFilepath)
     }
 	// Scan file until next version header detected, searching for Breaking Changes header along the way
 	foundBreakingChanges := false
@@ -427,19 +426,20 @@ func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string
 	}
 
 	lines := bytes.Split(preReleaseScriptsFile, []byte("\n"))
-	var allScriptFilepaths []string
 	for _, line := range(lines) {
-		allScriptFilepaths = append(allScriptFilepaths, string(line))
-	}
-	for _, scriptFilepath := range allScriptFilepaths {
+		scriptFilepath := string(line)
 		if strings.TrimSpace(scriptFilepath) == "" {
 			continue
 		}
 		scriptCmdString := path.Join(preReleaseScriptsDirpath, scriptFilepath)
 		scriptCmd := exec.Command(scriptCmdString, releaseVersion)
-		err := scriptCmd.Run()
-		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred attempting to run the following pre release script command: '%s %s'", scriptCmdString, releaseVersion)
+
+		if err := scriptCmd.Run(); err != nil {
+			castedErr, ok := err.(*exec.ExitError)
+			if !ok {
+				return stacktrace.Propagate(err, "Pre release script command '%s %s' failed with an unrecognized error", scriptCmdString, releaseVersion)
+			}
+			return stacktrace.NewError("Pre release script command '%s %s' returned logs:\n%d", scriptCmdString, releaseVersion, string(castedErr.Stderr))
 		}
 	}
 
@@ -460,12 +460,12 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	lines := bytes.Split(changelogFile, []byte("\n"))
 	newLines:= make([][]byte, len(lines) + 2) 
 	// Add a new TBD header for next release
-	newLines[0] = []byte(tbdHeaderStr)
+	newLines[0] = []byte(versionToBeReleasedPlaceholderHeaderStr)
 	i := 1
 	for _, line := range lines {
 		// Change current TBD header to Release Version header
-		if tbdHeaderRegex.Match(line){
-			releaseVersionHeader := fmt.Sprintf("# %s", releaseVersion)
+		if versionToBeReleasedPlaceholderHeaderRegex.Match(line){
+			releaseVersionHeader := fmt.Sprintf("%s %s", sectionHeaderPrefix, releaseVersion)
 			newLines[i + 1] = []byte(releaseVersionHeader)
 			i = i + 2
 		} else {
@@ -487,7 +487,7 @@ func countLinesMatchingRegex(filePath string, regexPat *regexp.Regexp) (int64, e
     numLinesMatchingPattern := int64(0)
     file, err := os.Open(filePath)
     if err != nil {
-		return -1, stacktrace.Propagate(err, "An error occurred while attempting to open file: '%s'.", filePath)
+		return -1, stacktrace.Propagate(err, "An error occurred while attempting to open file at '%s'", filePath)
     }
     defer file.Close()
     scanner := bufio.NewScanner(file)
@@ -497,7 +497,7 @@ func countLinesMatchingRegex(filePath string, regexPat *regexp.Regexp) (int64, e
 		}
     }
     if err := scanner.Err(); err != nil {
-		return -1, stacktrace.Propagate(err, "An error occurred while scanning file: '%s'.", filePath)
+		return -1, stacktrace.Propagate(err, "An error occurred while scanning file at '%s'", filePath)
     }
     return numLinesMatchingPattern, nil
 }

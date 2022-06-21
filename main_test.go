@@ -3,8 +3,14 @@ package main
 import (
 	"regexp"
 	"testing"
+	"fmt"
 
 	"github.com/stretchr/testify/require"
+)
+
+const (
+	sectionHeaderPrefix = "#"
+	versionToBeReleasedPlaceholderStr = "TBD"
 )
 
 func TestMain_SemverRegex(t *testing.T){
@@ -17,7 +23,7 @@ func TestMain_SemverRegex(t *testing.T){
 }
 
 func TestMain_TBDHeaderRegex(t *testing.T){
-	tbdHeaderRegexStr := "^#\\s*TBD\\s*$"
+	tbdHeaderRegexStr := fmt.Sprintf("^%s\\s*%s\\s*$", sectionHeaderPrefix, versionToBeReleasedPlaceholderStr)
 	
 	validStrings := []string{"# TBD", "# TBD  ", "#TBD"}
 	invalidStrings := []string{"## TBD", "# TD "}
@@ -26,7 +32,7 @@ func TestMain_TBDHeaderRegex(t *testing.T){
 }
 
 func TestMain_VersionHeaderRegex(t *testing.T){
-	versionHeaderRegexStr := "^#\\s*[0-9]+.[0-9]+.[0-9]+\\s*$"
+	versionHeaderRegexStr := fmt.Sprintf("^%s\\s*[0-9]+.[0-9]+.[0-9]+\\s*$", sectionHeaderPrefix)
 
 	validStrings := []string{"# 1.54.2", "#1.5.2"}
 	invalidStrings := []string{"## 1.54.2", "1.5.2", "# ..", "# 1.52.", "# 1..25", "# 1.52"}
@@ -35,7 +41,7 @@ func TestMain_VersionHeaderRegex(t *testing.T){
 }
 
 func TestMain_BreakingChangesSubheaderRegex(t *testing.T){
-	breakingChangesSubheaderRegexStr := "^###*\\s*[Bb]reak.*$"
+	breakingChangesSubheaderRegexStr := fmt.Sprintf("^%s%s%s*\\s*[Bb]reak.*$", sectionHeaderPrefix, sectionHeaderPrefix, sectionHeaderPrefix)
 
 	validStrings := []string{"### Breaking Changes", "### breaking changes", "### break", "## Breaking Chages", "###BreakingChanges", "### Break"}
 	invalidStrings := []string{"Breaking Changes", "### Breking Changes", " ## Break"}
