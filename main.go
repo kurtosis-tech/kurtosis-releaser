@@ -205,7 +205,7 @@ func runMain() error {
 	defer func() {
 		if shouldResetLocalBranch {
 			// git reset --hard origin/master
-			err = worktree.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: *remoteMasterHash })
+			err = worktree.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: *remoteMasterHash})
 			if err != nil {
 				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo local changes made for release '%s'. Please run 'git reset --hard %s' to undo manually.", nextReleaseVersion.String(), remoteMasterBranchName, err)
 			}
@@ -253,9 +253,9 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to create this git tag for the next release version: %s.", releaseTag)
 	}
-	shouldUndoReleaseTag := true
+	shouldDeleteLocalReleaseTag := true
 	defer func() {
-		if shouldUndoReleaseTag {
+		if shouldDeleteLocalReleaseTag {
 			// git tag -d
 			err = repository.DeleteTag(releaseTag)
 			if err != nil {
@@ -269,13 +269,38 @@ func runMain() error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while attempting to create this git tag for the next release version: %s.", vReleaseTag)
 	}
-	shouldUndoVPrefixedReleaseTag := true
+	shouldDeleteLocalVPrefixedReleaseTag := true
 	defer func() {
-		if shouldUndoVPrefixedReleaseTag {
+		if shouldDeleteLocalVPrefixedReleaseTag {
 			// git tag -d
 			err = repository.DeleteTag(vReleaseTag)
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo creationg of tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, vReleaseTag, err)
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to undo creation of tag '%s'. Please run 'git tag -d %s' to delete the tag manually.", vReleaseTag, vReleaseTag, err)
+			}
+		}
+	}()
+
+	vReleaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", vReleaseTag, vReleaseTag) 
+	pushVPrefixedReleaseTagOpts := &git.PushOptions{
+		RemoteName: originRemoteName,
+		RefSpecs:   []config.RefSpec{config.RefSpec(vReleaseTagRefSpec)},
+	}
+	if 	err = repository.Push(pushVPrefixedReleaseTagOpts); err != nil {
+		logrus.Errorf("An error occurred while pushing release tag: '%s' to '%s'.", vReleaseTag, remoteMasterBranchName, err)
+	}
+	shouldDeleteRemoteVPrefixedReleaseTag := true
+	defer func() {
+		if shouldDeleteRemoteVPrefixedReleaseTag {
+			// git push origin :tagname
+			emptyVReleaseTagRefSpec := fmt.Sprintf(":refs/tags/%s", vReleaseTag) 
+			deleteVPrefixedReleaseTagPushOpts := &git.PushOptions{
+				RemoteName: originRemoteName,
+				RefSpecs:   []config.RefSpec{config.RefSpec(emptyVReleaseTagRefSpec)},
+			}
+			err = repository.Push(deleteVPrefixedReleaseTagPushOpts)
+			fmt.Printf("did delete '%s' from remote\n", vReleaseTag)
+			if err != nil {
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to delete tag '%s' from '%s'. Please run 'git push --delete %s %s' to delete the tag manually.", vReleaseTag, originRemote, originRemote, vReleaseTag, err)
 			}
 		}
 	}()
@@ -292,10 +317,6 @@ func runMain() error {
 		}
 	}()
 
-	shouldResetLocalBranch = false
-	shouldUndoReleaseTag = false
-	shouldUndoVPrefixedReleaseTag = false
-
 	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName) 
 	releaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", releaseTag, releaseTag) 
 	pushReleaseTagOpts := &git.PushOptions{
@@ -305,16 +326,11 @@ func runMain() error {
 	if err = repository.Push(pushReleaseTagOpts); err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'.", releaseTag, remoteMasterBranchName)
 	}
-	// Best effort push of the v prefixed tag
-	vReleaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", vReleaseTag, vReleaseTag) 
-	pushVPrefixedReleaseTagOpts := &git.PushOptions{
-		RemoteName: originRemoteName,
-		RefSpecs:   []config.RefSpec{config.RefSpec(vReleaseTagRefSpec)},
-	}
-	if 	err = repository.Push(pushVPrefixedReleaseTagOpts); err != nil {
-		logrus.Errorf("An error occurred while pushing release tag: '%s' to '%s'.", vReleaseTag, remoteMasterBranchName, err)
-	}
 
+	shouldResetLocalBranch = false
+	shouldDeleteLocalReleaseTag = false
+	shouldDeleteLocalVPrefixedReleaseTag = false
+	shouldDeleteRemoteVPrefixedReleaseTag = false
 	shouldWarnAboutUndoingRemotePush = false
 
 	logrus.Infof("Release success.")
