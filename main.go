@@ -61,6 +61,15 @@ var (
 	versionToBeReleasedPlaceholderHeaderRegex = regexp.MustCompile(versionToBeReleasedPlaceholderHeaderRegexStr)
 	versionHeaderRegex = regexp.MustCompile(versionHeaderRegexStr)
 	breakingChangesRegex = regexp.MustCompile(breakingChangesSubheaderRegexStr)
+
+	shouldWarnAboutUndoingRemotePushMessage = 
+	`ACTION REQUIRED: An error occurred meaning we need to undo our push to '%s', but this is a dangerous operation for its risk that it will destroy history on the remote so you'll need to do this manually. 
+	Follow these instructions to properly undo this push:
+	1. Run a git fetch to pull down the latest changes from origin master
+	2. Verify that the origin master hasn't had any new commits that would get blown away if we reverted it
+	3. Ensure that the local branch has cleaned up correctly. Specifically, that it has no leftover changes from running the releaser and is on the correct commit.
+	3. Do a 'git push -f %s %s' from local master to remote master
+	`
 )
 
 func main() {
@@ -298,7 +307,6 @@ func runMain() error {
 				RefSpecs:   []config.RefSpec{config.RefSpec(emptyVReleaseTagRefSpec)},
 			}
 			err = repository.Push(deleteVPrefixedReleaseTagPushOpts)
-			fmt.Printf("did delete '%s' from remote\n", vReleaseTag)
 			if err != nil {
 				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to delete tag '%s' from '%s'. Please run 'git push --delete %s %s' to delete the tag manually.", vReleaseTag, originRemote, originRemote, vReleaseTag, err)
 			}
@@ -313,9 +321,11 @@ func runMain() error {
 	shouldWarnAboutUndoingRemotePush := true
 	defer func() {
 		if shouldWarnAboutUndoingRemotePush {
-			logrus.Errorf("ACTION REQUIRED: An error occurred meaning we need to undo our push to '%s', but this is a dangerous operation for its risk that it will destroy history on the remote so you'll need to do this manually. Follow this tutorial: 'LINK TO INSTRUCTIONS TO UNDO PUSH.'", originRemoteName, err)
+			logrus.Errorf(shouldWarnAboutUndoingRemotePushMessage, originRemoteName, originRemoteName, masterBranchName, err)
 		}
 	}()
+
+	return stacktrace.NewError("induce error")
 
 	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName) 
 	releaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", releaseTag, releaseTag) 
