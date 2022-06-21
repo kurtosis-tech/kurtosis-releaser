@@ -286,6 +286,10 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	// The order in which we push resources to remote is: vReleaseTag -> Commits -> Release Tag
+	// This is important because we push in order of easiest to reverse to harder to reverse in case of failures
+	// With pushing Release Tag to remote being the point at which operations are irreversible due to CI being triggered
+
 	vReleaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", vReleaseTag, vReleaseTag)
 	pushVPrefixedReleaseTagOpts := &git.PushOptions{
 		RemoteName: originRemoteName,
