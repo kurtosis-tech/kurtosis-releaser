@@ -6,7 +6,6 @@ import (
 	"os"
 )
 
-
 func main() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		ForceColors:   true,

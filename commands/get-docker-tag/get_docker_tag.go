@@ -5,6 +5,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -17,15 +18,11 @@ import (
 
 const (
 	gitDirname = ".git"
-	gitUsername = "git"
-	originRemoteName = "origin"
-	masterBranchName = "master"
 
-	tagsPrefix = "refs/tags/"
-	headRef = "refs/heads/"
-	dirtySuffix = "-dirty"
+	headRef            = "refs/heads/"
+	dirtySuffix        = "-dirty"
 	getDockerTagCmdStr = "get-docker-tag"
-	semverRegexStr = "^[0-9]+.[0-9]+.[0-9]+$"
+	semverRegexStr     = "^[0-9]+.[0-9]+.[0-9]+$"
 
 	gitRefSanitizingRegexStr = "s,[/:],_,g"
 )
@@ -34,9 +31,9 @@ var semverRegex = regexp.MustCompile(semverRegexStr)
 var gitRefSanitizingRegex = regexp.MustCompile(gitRefSanitizingRegexStr)
 
 var GetDockerTagCmd = &cobra.Command{
-	Use: getDockerTagCmdStr,
+	Use:   getDockerTagCmdStr,
 	Short: "Prints the expected docker tag given the current state of the Kurtosis repo this command is run on.",
-	RunE: run,
+	RunE:  run,
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -100,7 +97,7 @@ func run(cmd *cobra.Command, args []string) error {
 	// }
 
 	cIter, err := repository.Log(&git.LogOptions{
-		From: head.Hash(),
+		From:  head.Hash(),
 		Order: git.LogOrderCommitterTime,
 	})
 	if err != nil {
