@@ -16,16 +16,14 @@ import (
 )
 
 const (
-	gitDirname               = ".git"
-	gitRefSanitizingRegexStr = "s,[/:],_,g"
-	masterBranchName         = "master"
-	dirtySuffix              = "-dirty"
-	getDockerTagCmdStr       = "get-docker-tag"
-	semverRegexStr           = "^[0-9]+.[0-9]+.[0-9]+$"
+	gitDirname         = ".git"
+	masterBranchName   = "master"
+	dirtySuffix        = "-dirty"
+	getDockerTagCmdStr = "get-docker-tag"
+	semverRegexStr     = "^[0-9]+.[0-9]+.[0-9]+$"
 )
 
 var semverRegex = regexp.MustCompile(semverRegexStr)
-var gitRefSanitizingRegex = regexp.MustCompile(gitRefSanitizingRegexStr)
 
 var GetDockerTagCmd = &cobra.Command{
 	Use:   getDockerTagCmdStr,
