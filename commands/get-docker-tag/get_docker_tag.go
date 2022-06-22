@@ -16,14 +16,12 @@ import (
 )
 
 const (
-	gitDirname = ".git"
-
-	masterBranchName   = "master"
-	dirtySuffix        = "-dirty"
-	getDockerTagCmdStr = "get-docker-tag"
-	semverRegexStr     = "^[0-9]+.[0-9]+.[0-9]+$"
-
+	gitDirname               = ".git"
 	gitRefSanitizingRegexStr = "s,[/:],_,g"
+	masterBranchName         = "master"
+	dirtySuffix              = "-dirty"
+	getDockerTagCmdStr       = "get-docker-tag"
+	semverRegexStr           = "^[0-9]+.[0-9]+.[0-9]+$"
 )
 
 var semverRegex = regexp.MustCompile(semverRegexStr)
@@ -74,7 +72,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	gitRef := ""
-	// Get latest tag if it exists
+	// Get tag on most recent commit if it exists
 	tag, err := getTagOnCommit(repository, localMasterHash)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to get tag on most recent commit '%s'", localMasterHash.String())
@@ -82,7 +80,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if tag != nil {
 		gitRef = tag.Name().Short()
 	}
-	// If no tags exist, use abbreviated hash of most recent commit
+	// If no tag exists, use abbreviated hash of most recent commit
 	if gitRef == "" {
 		abbrevCommitHash := localMasterHash.String()[0:6]
 		gitRef = abbrevCommitHash
@@ -113,7 +111,7 @@ func getTagOnCommit(repo *git.Repository, commitHash *plumbing.Hash) (*plumbing.
 		if err != nil {
 			return stacktrace.NewError("An error occurred resolving revision '%s'", tagRef.Name().String())
 		}
-		if bytes.Equal(commitHash[:], tagCommitHash[:]) {
+		if bytes.Equal(commitHash[:], tagCommitHash[:]) && semverRegex.Match([]byte(tagRef.Name().Short())) {
 			tag = tagRef
 			return storer.ErrStop
 		}
