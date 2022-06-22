@@ -88,7 +88,7 @@ func run(cmd *cobra.Command, args []string) error {
 	// 		if err != nil {
 	// 			return stacktrace.Propagate(err, "An error occurred while retrieving the following tag: %s.", tagName)
 	// 		}
-	// 		allTagSemVers = append(allTagSemVers, tagSemVer) 
+	// 		allTagSemVers = append(allTagSemVers, tagSemVer)
 	// 	}
 	// 	return nil
 	// })
