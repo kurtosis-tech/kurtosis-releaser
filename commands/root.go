@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	cliCmdStr          = "kurtosis-releaser <action>"
+	cliCmdStr          = "kudet <action>"
 	cliLogLevelStrFlag = "cli-log-level"
 )
 
