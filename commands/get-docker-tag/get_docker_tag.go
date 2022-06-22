@@ -2,7 +2,6 @@ package getdockertag
 
 import (
 	"fmt"
-	"github.com/Masterminds/semver/v3"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -12,14 +11,13 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"sort"
 	"strings"
 )
 
 const (
 	gitDirname = ".git"
 
-	headRef            = "refs/heads/"
+	masterBranchName   = "master"
 	dirtySuffix        = "-dirty"
 	getDockerTagCmdStr = "get-docker-tag"
 	semverRegexStr     = "^[0-9]+.[0-9]+.[0-9]+$"
@@ -68,33 +66,39 @@ func run(cmd *cobra.Command, args []string) error {
 		appendDirtySuffix = true
 	}
 
-	head, err := repository.Head()
+	gitRef := ""
+	// Get latest tag if it exists
+	tag, err := getTagOnMostRecentCommit(repository)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while attempting to get the ref to HEAD of the local repository.")
+		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMasterBranchName)
+	}
+	if tag != nil {
+		gitRef = tag.String()
+	}
+	// If no tags exist, get commit hash
+	if gitRef == "" {
+		localMasterHash, err := repository.ResolveRevision(plumbing.Revision(masterBranchName))
+		if err != nil {
+			return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", masterBranchName)
+		}
+		abbrevCommitHash := localMasterHash.String()[0:6]
+		gitRef = abbrevCommitHash
 	}
 
-	// Get the latest tag in the repo, if it exists
-	// tagrefs, err := repository.Tags()
-	// if err != nil {
-	// 	return stacktrace.Propagate(err, "An error occurred while retrieving tags for repository.")
-	// }
-	// var allTagSemVers []*semver.Version
-	// err = tagrefs.ForEach(func(tagref *plumbing.Reference) error {
-	// 	tagName := tagref.Name().String()
-	// 	tagName = strings.ReplaceAll(tagName, tagsPrefix, "")
+	if appendDirtySuffix {
+		gitRef = fmt.Sprintf("%s%s", gitRef, dirtySuffix)
+	}
 
-	// 	if semverRegex.Match([]byte(tagName)) {
-	// 		tagSemVer, err := semver.StrictNewVersion(tagName)
-	// 		if err != nil {
-	// 			return stacktrace.Propagate(err, "An error occurred while retrieving the following tag: %s.", tagName)
-	// 		}
-	// 		allTagSemVers = append(allTagSemVers, tagSemVer)
-	// 	}
-	// 	return nil
-	// })
-	// if err != nil {
-	// 	return err
-	// }
+	// Sanitize gitref for docker tag by replacing all ':' or '/' characters with '_'
+	gitRef = strings.ReplaceAll(gitRef, ":", "_")
+	gitRef = strings.ReplaceAll(gitRef, "/", "_")
+
+	dockerTag := gitRef
+	logrus.Infof(dockerTag)
+	return nil
+}
+
+func getTagOnMostRecentCommit(repo *git.Repository) (*git.TagMode, error) {
 
 	cIter, err := repository.Log(&git.LogOptions{
 		From:  head.Hash(),
@@ -111,72 +115,5 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	})
 
-	// // Opening the repo
-	// cwd , err := filepath.Abs(".")
-	// PanicIfError(err)
-	// r, err := git.PlainOpen(cwd)
-	// PanicIfError(err)
-
-	// // Head
-	// head, err := r.Head()
-	// PanicIfError(err)
-	// cIter, err := r.Log(&git.LogOptions{
-	// 	From: head.Hash(),
-	// 	Order: git.LogOrderCommitterTime,
-	// })
-
-	// var tag *plumbing.Reference
-	// err = cIter.ForEach(func(c *object.Commit) error {
-	// 	// Tags
-	// 	tags, err := r.Tags()
-	// 	PanicIfError(err)
-
-	// 	err = tags.ForEach(func(t *plumbing.Reference) error {
-
-	// 		t_hash := t.Hash()
-	// 		fmt.Printf("%v - %v\n", c.Hash, t_hash)
-
-	// 		if bytes.Equal(c.Hash[:] ,t_hash[:]) {
-	// 			// Found!
-	// 			tag = t;
-	// 			return storer.ErrStop
-	// 		}
-	// 		// No luck continue searching.
-	// 		return nil
-	// 	})
-	// 	if tag != nil {
-	// 		// Found
-	// 		return storer.ErrStop
-	// 	}
-	// 	// Not found!
-	// 	return nil
-	// })
-	// PanicIfError(err)
-
-	// Get latest tag if it exists
-	gitRef := ""
-	if len(allTagSemVers) > 0 {
-		sort.Sort(sort.Reverse(semver.Collection(allTagSemVers)))
-		gitRef = allTagSemVers[0].String()
-	}
-
-	// If no tags exist, get branch name
-	if gitRef == "" {
-		branchRefStr := head.Name().String()
-		branchName := strings.ReplaceAll(branchRefStr, headRef, "")
-		gitRef = branchName
-	}
-
-	// add dirty if needed
-	if appendDirtySuffix {
-		gitRef = fmt.Sprintf("%s%s", gitRef, dirtySuffix)
-	}
-
-	// Sanitize gitref for docker tag by replacing all ':' or '/' characters with '_'
-	gitRef = strings.ReplaceAll(gitRef, ":", "_")
-	gitRef = strings.ReplaceAll(gitRef, "/", "_")
-
-	dockerTag := gitRef
-	logrus.Infof(dockerTag)
 	return nil
 }
