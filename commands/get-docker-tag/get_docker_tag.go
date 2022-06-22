@@ -1,10 +1,11 @@
 package getdockertag
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -66,21 +67,23 @@ func run(cmd *cobra.Command, args []string) error {
 		appendDirtySuffix = true
 	}
 
+	// Get most recent commit
+	localMasterHash, err := repository.ResolveRevision(plumbing.Revision(masterBranchName))
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", masterBranchName)
+	}
+
 	gitRef := ""
 	// Get latest tag if it exists
-	tag, err := getTagOnMostRecentCommit(repository)
+	tag, err := getTagOnCommit(repository, localMasterHash)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMasterBranchName)
+		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMasterHash)
 	}
 	if tag != nil {
 		gitRef = tag.String()
 	}
-	// If no tags exist, get commit hash
+	// If no tags exist, use abbreviated hash of most recent commit
 	if gitRef == "" {
-		localMasterHash, err := repository.ResolveRevision(plumbing.Revision(masterBranchName))
-		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", masterBranchName)
-		}
 		abbrevCommitHash := localMasterHash.String()[0:6]
 		gitRef = abbrevCommitHash
 	}
@@ -98,22 +101,21 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func getTagOnMostRecentCommit(repo *git.Repository) (*git.TagMode, error) {
-
-	cIter, err := repository.Log(&git.LogOptions{
-		From:  head.Hash(),
-		Order: git.LogOrderCommitterTime,
-	})
+func getTagOnCommit(repo *git.Repository, commitHash *plumbing.Hash) (*plumbing.Reference, error) {
+	tagrefs, err := repo.Tags()
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred attempting to get commit logs of repository starting from %s.", head)
+		return nil, stacktrace.Propagate(err, "An error occurred attempting to get tags on this repository.")
 	}
+
 	var tag *plumbing.Reference
-	err = cIter.ForEach(func(c *object.Commit) error {
-		tags, err := repository.Tags()
-		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred attempting to get tags on this repository.")
+	_ = tagrefs.ForEach(func(t *plumbing.Reference) error {
+		tagHash := t.Hash()
+		if bytes.Equal(commitHash[:], tagHash[:]) {
+			tag = t
+			return storer.ErrStop
 		}
+		return nil
 	})
 
-	return nil
+	return tag, nil
 }
