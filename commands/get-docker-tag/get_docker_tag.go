@@ -77,10 +77,10 @@ func run(cmd *cobra.Command, args []string) error {
 	// Get latest tag if it exists
 	tag, err := getTagOnCommit(repository, localMasterHash)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMasterHash)
+		return stacktrace.Propagate(err, "An error occurred attempting to get tag on most recent commit '%s'", localMasterHash.String())
 	}
 	if tag != nil {
-		gitRef = tag.String()
+		gitRef = tag.Name().Short()
 	}
 	// If no tags exist, use abbreviated hash of most recent commit
 	if gitRef == "" {
@@ -108,10 +108,13 @@ func getTagOnCommit(repo *git.Repository, commitHash *plumbing.Hash) (*plumbing.
 	}
 
 	var tag *plumbing.Reference
-	_ = tagrefs.ForEach(func(t *plumbing.Reference) error {
-		tagHash := t.Hash()
-		if bytes.Equal(commitHash[:], tagHash[:]) {
-			tag = t
+	_ = tagrefs.ForEach(func(tagRef *plumbing.Reference) error {
+		tagCommitHash, err := repo.ResolveRevision(plumbing.Revision(tagRef.Name().String()))
+		if err != nil {
+			return stacktrace.NewError("An error occurred resolving revision '%s'", tagRef.Name().String())
+		}
+		if bytes.Equal(commitHash[:], tagCommitHash[:]) {
+			tag = tagRef
 			return storer.ErrStop
 		}
 		return nil
