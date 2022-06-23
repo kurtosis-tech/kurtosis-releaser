@@ -11,20 +11,23 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"path"
+	"regexp"
 	"sort"
-	"strings"
 )
 
 const (
-	gitDirname         = ".git"
-	masterBranchName   = "master"
-	dirtySuffix        = "-dirty"
-	getDockerTagCmdStr = "get-docker-tag"
+	gitDirname                 = ".git"
+	abbrevCommitLength         = 6
+	dirtySuffix                = "-dirty"
+	getDockerTagCmdStr         = "get-docker-tag"
+	invalidDockerCharsRegexStr = "[^a-zA-Z0-9]"
 )
+
+var invalidDockerCharsRegex = regexp.MustCompile(invalidDockerCharsRegexStr)
 
 var GetDockerTagCmd = &cobra.Command{
 	Use:   getDockerTagCmdStr,
-	Short: "Prints the expected docker tag given the current state of the Kurtosis repo this command is run on.",
+	Short: "Get Docker Image tag of repo",
 	RunE:  run,
 }
 
@@ -46,55 +49,55 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determines if working tree is clean
-	appendDirtySuffix := false
+	shouldAppendDirtySuffix := false
 	worktree, err := repository.Worktree()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the worktree of the repository.")
 	}
 	currWorktreeStatus, err := worktree.Status()
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while trying to retrieve the status of the worktree of the repository.")
+		return stacktrace.Propagate(err, "An errorr occurred while trying to retrieve the status of the worktree of the repository.")
 	}
 	isClean := currWorktreeStatus.IsClean()
 	if !isClean {
-		appendDirtySuffix = true
+		shouldAppendDirtySuffix = true
 	}
 
 	// Get most recent commit
-	localMasterHash, err := repository.ResolveRevision(plumbing.Revision(masterBranchName))
+	head, err := repository.Head()
+	mostRecentCommitHash := head.Hash()
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", masterBranchName)
+		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", mostRecentCommitHash)
 	}
 
 	gitRef := ""
 	// Get tag on most recent commit if it exists
-	tag, err := getTagOnCommit(repository, localMasterHash)
+	tag, err := getTagOnCommit(repository, mostRecentCommitHash)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred attempting to get tag on most recent commit '%s'", localMasterHash.String())
+		return stacktrace.Propagate(err, "An error occurred attempting to get tag on most recent commit '%s'", mostRecentCommitHash.String())
 	}
 	if tag != nil {
 		gitRef = tag.Name().Short()
 	}
 	// If no tag exists, use abbreviated hash of most recent commit
 	if gitRef == "" {
-		abbrevCommitHash := localMasterHash.String()[0:6]
+		abbrevCommitHash := mostRecentCommitHash.String()[0:abbrevCommitLength]
 		gitRef = abbrevCommitHash
 	}
 
-	if appendDirtySuffix {
+	if shouldAppendDirtySuffix {
 		gitRef = fmt.Sprintf("%s%s", gitRef, dirtySuffix)
 	}
 
-	// Sanitize gitref for docker tag by replacing all ':' or '/' characters with '_'
-	gitRef = strings.ReplaceAll(gitRef, ":", "_")
-	gitRef = strings.ReplaceAll(gitRef, "/", "_")
+	// Sanitize gitref by replacing invalid docker image tag chars with _
+	gitRef = invalidDockerCharsRegex.ReplaceAllString(gitRef, "_")
 
 	dockerTag := gitRef
-	logrus.Infof(dockerTag)
+	fmt.Println(dockerTag)
 	return nil
 }
 
-func getTagOnCommit(repo *git.Repository, commitHash *plumbing.Hash) (*plumbing.Reference, error) {
+func getTagOnCommit(repo *git.Repository, commitHash plumbing.Hash) (*plumbing.Reference, error) {
 	tagrefs, err := repo.Tags()
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "An error occurred attempting to get tags on this repository.")
@@ -108,6 +111,7 @@ func getTagOnCommit(repo *git.Repository, commitHash *plumbing.Hash) (*plumbing.
 		}
 		if bytes.Equal(commitHash[:], tagCommitHash[:]) {
 			tags = append(tags, tagRef)
+			// ErrStop is a go-git error type used to stop a a ForEach Iter
 			return storer.ErrStop
 		}
 		return nil
