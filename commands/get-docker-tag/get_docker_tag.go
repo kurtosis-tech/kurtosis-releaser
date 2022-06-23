@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"path"
+	"sort"
 	"strings"
 )
 
@@ -99,18 +100,25 @@ func getTagOnCommit(repo *git.Repository, commitHash *plumbing.Hash) (*plumbing.
 		return nil, stacktrace.Propagate(err, "An error occurred attempting to get tags on this repository.")
 	}
 
-	var tag *plumbing.Reference
+	var tags []*plumbing.Reference
 	_ = tagrefs.ForEach(func(tagRef *plumbing.Reference) error {
 		tagCommitHash, err := repo.ResolveRevision(plumbing.Revision(tagRef.Name().String()))
 		if err != nil {
 			return stacktrace.NewError("An error occurred resolving revision '%s'", tagRef.Name().String())
 		}
 		if bytes.Equal(commitHash[:], tagCommitHash[:]) {
-			tag = tagRef
+			tags = append(tags, tagRef)
 			return storer.ErrStop
 		}
 		return nil
 	})
+	if len(tags) > 0 {
+		// sort tags alphabetically
+		sort.SliceStable(tags, func(i int, j int) bool {
+			return tags[i].Name().Short() < tags[j].Name().Short()
+		})
+		return tags[0], nil
+	}
 
-	return tag, nil
+	return nil, nil
 }
