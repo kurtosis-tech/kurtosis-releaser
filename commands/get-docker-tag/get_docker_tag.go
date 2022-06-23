@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 )
 
@@ -20,10 +19,7 @@ const (
 	masterBranchName   = "master"
 	dirtySuffix        = "-dirty"
 	getDockerTagCmdStr = "get-docker-tag"
-	semverRegexStr     = "^[0-9]+.[0-9]+.[0-9]+$"
 )
-
-var semverRegex = regexp.MustCompile(semverRegexStr)
 
 var GetDockerTagCmd = &cobra.Command{
 	Use:   getDockerTagCmdStr,
@@ -109,7 +105,7 @@ func getTagOnCommit(repo *git.Repository, commitHash *plumbing.Hash) (*plumbing.
 		if err != nil {
 			return stacktrace.NewError("An error occurred resolving revision '%s'", tagRef.Name().String())
 		}
-		if bytes.Equal(commitHash[:], tagCommitHash[:]) && semverRegex.Match([]byte(tagRef.Name().Short())) {
+		if bytes.Equal(commitHash[:], tagCommitHash[:]) {
 			tag = tagRef
 			return storer.ErrStop
 		}
