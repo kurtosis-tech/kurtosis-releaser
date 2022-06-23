@@ -73,7 +73,7 @@ var (
 
 var ReleaseCmd = &cobra.Command{
 	Use:   releaseCmdStr,
-	Short: "Performs the release process for creating a new release of a versioned Kurtosis repo",
+	Short: "Cuts a new release on the repo",
 	RunE:  run,
 }
 
