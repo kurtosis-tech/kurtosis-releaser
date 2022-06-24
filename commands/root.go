@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"github.com/kurtosis-tech/kurtosis-releaser/commands/get-docker-tag"
-	"github.com/kurtosis-tech/kurtosis-releaser/commands/release"
+	"github.com/kurtosis-tech/kudet/commands/get-docker-tag"
+	"github.com/kurtosis-tech/kudet/commands/release"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"

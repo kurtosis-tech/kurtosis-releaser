@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kurtosis-tech/kurtosis-releaser/commands"
+	"github.com/kurtosis-tech/kudet/commands"
 	"github.com/sirupsen/logrus"
 	"os"
 )

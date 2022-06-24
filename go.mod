@@ -1,4 +1,4 @@
-module github.com/kurtosis-tech/kurtosis-releaser
+module github.com/kurtosis-tech/kudet
 
 go 1.18
 
