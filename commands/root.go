@@ -1,15 +1,16 @@
 package commands
 
 import (
-	"github.com/kurtosis-tech/kurtosis-releaser/commands/release"
+	"github.com/kurtosis-tech/kudet/commands/get-docker-tag"
+	"github.com/kurtosis-tech/kudet/commands/release"
 	"github.com/kurtosis-tech/stacktrace"
-	"github.com/sirupsen/logrus"	
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"strings"
 )
 
 const (
-	cliCmdStr = "kurtosis-releaser <action>"
+	cliCmdStr          = "kudet <action>"
 	cliLogLevelStrFlag = "cli-log-level"
 )
 
@@ -25,8 +26,8 @@ var RootCmd = &cobra.Command{
 
 var logLevelStr string
 var defaultLogLevelStr = logrus.InfoLevel.String()
-  
-func init(){
+
+func init() {
 	RootCmd.PersistentFlags().StringVar(
 		&logLevelStr,
 		cliLogLevelStrFlag,
@@ -35,6 +36,7 @@ func init(){
 	)
 
 	RootCmd.AddCommand(release.ReleaseCmd)
+	RootCmd.AddCommand(getdockertag.GetDockerTagCmd)
 }
 
 // ====================================================================================================
