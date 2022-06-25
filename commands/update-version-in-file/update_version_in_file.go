@@ -63,7 +63,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.Propagate(err, "An error occurred while trying to count the number of occurrences of '%s' in '%s'", searchPatternStr, toUpdateFilepath)
 	}
 	if numLines != expectedNumSearchPatternLines {
-		return stacktrace.Propagate(err, "An incorrect amount, '%d' of lines matching '%s' was found in '%s'. '%d' matching lines were expected.", numLines, searchPatternStr, toUpdateFilepath, expectedNumSearchPatternLines)
+		return stacktrace.NewError("An incorrect amount, '%d' of lines matching '%s' was found in '%s'. '%d' matching lines were expected.", numLines, searchPatternStr, toUpdateFilepath, expectedNumSearchPatternLines)
 	}
 
 	updatedFile := replaceLinesMatchingPatternInFile(replaceValue, searchPatternRegex, fileToUpdate)
@@ -79,7 +79,7 @@ func replaceLinesMatchingPatternInFile(replacement string, regexPat *regexp.Rege
 	lines := bytes.Split(file, []byte("\n"))
 	for i, line := range lines {
 		if regexPat.Match(line) {
-			lines[i] = []byte(replacement + "\n")
+			lines[i] = []byte(replacement)
 		}
 	}
 	return bytes.Join(lines, []byte("\n"))
