@@ -1,9 +1,9 @@
 package updateversioninfile
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/kurtosis-tech/kudet/helpers"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/spf13/cobra"
 	"os"
@@ -58,7 +58,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	replaceValue := fmt.Sprintf(patternFormatStr, newVersion)
 
-	numLines, err := countLinesMatchingRegex(toUpdateFilepath, searchPatternRegex)
+	numLines, err := helpers.CountLinesMatchingRegex(toUpdateFilepath, searchPatternRegex)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to count the number of occurrences of '%s' in '%s'", searchPatternStr, toUpdateFilepath)
 	}
@@ -83,23 +83,4 @@ func replaceLinesMatchingPatternInFile(replacement string, regexPat *regexp.Rege
 		}
 	}
 	return bytes.Join(lines, []byte("\n"))
-}
-
-func countLinesMatchingRegex(filePath string, regexPat *regexp.Regexp) (int, error) {
-	numLinesMatchingPattern := 0
-	file, err := os.Open(filePath)
-	if err != nil {
-		return -1, stacktrace.Propagate(err, "An error occurred while attempting to open file at '%s'", filePath)
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if regexPat.Match(scanner.Bytes()) {
-			numLinesMatchingPattern++
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return -1, stacktrace.Propagate(err, "An error occurred while scanning file at '%s'", filePath)
-	}
-	return numLinesMatchingPattern, nil
 }

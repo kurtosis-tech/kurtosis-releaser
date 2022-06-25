@@ -9,6 +9,7 @@ import (
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/kurtosis-tech/kudet/helpers"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -169,14 +170,14 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Conduct changelog file validation
 	changelogFilepath := path.Join(currentWorkingDirpath, relChangelogFilepath)
-	tbdHeaderCount, err := countLinesMatchingRegex(changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex)
+	tbdHeaderCount, err := helpers.CountLinesMatchingRegex(changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex.String())
 	}
 	if tbdHeaderCount != expectedNumTBDHeaderLines {
 		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.", expectedNumTBDHeaderLines, tbdHeaderCount)
 	}
-	versionHeaderCount, err := countLinesMatchingRegex(changelogFilepath, versionHeaderRegex)
+	versionHeaderCount, err := helpers.CountLinesMatchingRegex(changelogFilepath, versionHeaderRegex)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, versionHeaderRegex.String())
 	}
@@ -525,24 +526,4 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	}
 
 	return nil
-}
-
-// adapted from: https://stackoverflow.com/questions/26709971/could-this-be-more-efficient-in-go
-func countLinesMatchingRegex(filePath string, regexPat *regexp.Regexp) (int64, error) {
-	numLinesMatchingPattern := int64(0)
-	file, err := os.Open(filePath)
-	if err != nil {
-		return -1, stacktrace.Propagate(err, "An error occurred while attempting to open file at '%s'", filePath)
-	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if regexPat.Match(scanner.Bytes()) {
-			numLinesMatchingPattern++
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return -1, stacktrace.Propagate(err, "An error occurred while scanning file at '%s'", filePath)
-	}
-	return numLinesMatchingPattern, nil
 }
