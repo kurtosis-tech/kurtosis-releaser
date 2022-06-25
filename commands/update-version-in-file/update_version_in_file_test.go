@@ -1,92 +1,69 @@
 package updateversioninfile
 
 import (
+	"github.com/stretchr/testify/require"
+	"regexp"
 	"testing"
 )
 
-func TestDoBreakingChangesExist(t *testing.T) {
-	noVersion :=
-		`# TBD
-* Something
-* Something else`
+func TestNoMatchingPatternFoundReturnsIdenticalFile(t *testing.T) {
+	replacementStr := "KURTOSIS_CORE_VERSION: string = \"0.1.3\""
+	searchPatternStr := "KURTOSIS_CORE_VERSION: string = \"[0-9A-Za-z_./-]+\""
+	searchPatternRegex := regexp.MustCompile(searchPatternStr)
 
-	onlyOneVersion :=
-		`#TBD
-* Something
+	fileWithNoMatchingPattern :=
+		`// DO NOT UPDATE, MANUALLY UPDATED
 
-#0.1.0
+### A Big change
 * Something`
 
-	onlyOneVersionWithSpaces :=
-		`# TBD
-* Something
+	updatedFile := replaceLinesMatchingPattern([]byte(fileWithNoMatchingPattern), searchPatternRegex, replacementStr)
 
-# 0.1.0
-* Something`
+	require.Equal(t, string(updatedFile), string(fileWithNoMatchingPattern))
+}
 
-	onlyOneVersionTwoHashBreakingChanges :=
-		`#TBD
-* Something
+func TestMatchingPatternFoundReturnsUpdatedLine(t *testing.T) {
+	replacementStr := "KURTOSIS_CORE_VERSION: string = \"0.1.3\""
+	searchPatternStr := "KURTOSIS_CORE_VERSION: string = \"[0-9A-Za-z_./-]+\""
+	searchPatternRegex := regexp.MustCompile(searchPatternStr)
 
-##Breaking Changes
-* Something else
+	fileWithMatchingPattern :=
+		`// DO NOT UPDATE, MANUALLY UPDATED
+KURTOSIS_CORE_VERSION: string = "1.5.2"
+### A Big change
+* Something Else`
 
-#0.1.0
-* Something`
+	updatedFileWithReplacedLine :=
+		`// DO NOT UPDATE, MANUALLY UPDATED
+KURTOSIS_CORE_VERSION: string = "0.1.3"
+### A Big change
+* Something Else`
 
-	onlyOneVersionThreeHashBreakingChanges :=
-		`#TBD
-* Something
+	updatedFile := replaceLinesMatchingPattern([]byte(fileWithMatchingPattern), searchPatternRegex, replacementStr)
 
-###Breaking Changes
-* Something else
+	require.Equal(t, string(updatedFile), string(updatedFileWithReplacedLine))
+}
 
-#0.1.0
-* Something`
+func TestMultipleMatchingPatternsFoundReturnsUpdatesLines(t *testing.T) {
+	replacementStr := "KURTOSIS_CORE_VERSION: string = \"0.1.3\""
+	searchPatternStr := "KURTOSIS_CORE_VERSION: string = \"[0-9A-Za-z_./-]+\""
+	searchPatternRegex := regexp.MustCompile(searchPatternStr)
 
-	onlyOneVersionFourHashBreakingChanges :=
-		`#TBD
-* Something
+	fileWithMultipleLinesMatchingPattern :=
+		`// DO NOT UPDATE, MANUALLY UPDATED
+KURTOSIS_CORE_VERSION: string = "1.5.2"
+### A Big change
+* Something Else
+KURTOSIS_CORE_VERSION: string = "1.5.2"`
 
-####Breaking Changes
-* Something else
+	updatedFileWithReplacedLines :=
+		`// DO NOT UPDATE, MANUALLY UPDATED
+KURTOSIS_CORE_VERSION: string = "0.1.3"
+### A Big change
+* Something Else
+KURTOSIS_CORE_VERSION: string = "0.1.3"`
 
-#0.1.0
-* Something`
+	updatedFile := replaceLinesMatchingPattern([]byte(fileWithMultipleLinesMatchingPattern), searchPatternRegex, replacementStr)
 
-	multipleVersions :=
-		`#TBD
-* Something
-
-#0.1.1
-* Something else
-
-#0.1.0
-* Something`
-
-	multipleVersionsBreakingChanges :=
-		`#TBD
-* Something
-
-### Breaking Changes
-* Something
-
-#0.1.1
-* Something else
-
-#0.1.0
-* Something`
-
-	lowercaseBreakingChanges :=
-		`# TBD
-### breaking changes
-* Some breaks
-
-# 0.1.0
-* Something`
-
-	shouldHaveBreakingChanges := []string{onlyOneVersionTwoHashBreakingChanges, onlyOneVersionThreeHashBreakingChanges, onlyOneVersionFourHashBreakingChanges, multipleVersionsBreakingChanges, lowercaseBreakingChanges}
-	shouldNotHaveBreakingChanges := []string{noVersion, onlyOneVersion, onlyOneVersionWithSpaces, multipleVersions}
-
-	testBreakingChangesExists(t, shouldHaveBreakingChanges, shouldNotHaveBreakingChanges)
+	require.Equal(t, string(updatedFile), string(updatedFileWithReplacedLines))
 }

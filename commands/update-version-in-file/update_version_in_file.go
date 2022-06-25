@@ -66,7 +66,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.NewError("An incorrect amount, '%d' of lines matching '%s' was found in '%s'. '%d' matching lines were expected.", numLines, searchPatternStr, toUpdateFilepath, expectedNumSearchPatternLines)
 	}
 
-	updatedFile := replaceLinesMatchingPatternInFile(replaceValue, searchPatternRegex, fileToUpdate)
+	updatedFile := replaceLinesMatchingPattern(fileToUpdate, searchPatternRegex, replaceValue)
 
 	err = os.WriteFile(toUpdateFilepath, updatedFile, fileToUpdateMode)
 	if err != nil {
@@ -75,7 +75,7 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func replaceLinesMatchingPatternInFile(replacement string, regexPat *regexp.Regexp, file []byte) []byte {
+func replaceLinesMatchingPattern(file []byte, regexPat *regexp.Regexp, replacement string) []byte {
 	lines := bytes.Split(file, []byte("\n"))
 	for i, line := range lines {
 		if regexPat.Match(line) {
