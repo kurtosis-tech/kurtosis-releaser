@@ -3,7 +3,7 @@ package updateversioninfile
 import (
 	"bytes"
 	"fmt"
-	"github.com/kurtosis-tech/kudet/helpers"
+	"github.com/kurtosis-tech/kudet/commands_impl/file_line_matcher"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/spf13/cobra"
 	"os"
@@ -22,7 +22,8 @@ var versionRegex = regexp.MustCompile(versionRegexStr)
 
 var UpdateVersionInFileCmd = &cobra.Command{
 	Use:   updateVersionInFileCmdStr,
-	Short: "Updates semantic version of a Kurtosis Repo in file",
+	Short: "Updates version line",
+	Long:  "Updates line in a file containing a Kurtosis repo version to a new version",
 	Args:  cobra.ExactArgs(3),
 	RunE:  run,
 }
@@ -36,29 +37,29 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		return stacktrace.Propagate(err, "An error occurred attempting to retrieve file info for file at '%s'", toUpdateFilepath)
 	}
+	if !strings.Contains(patternFormatStr, formatStrReplacementSubstr) {
+		return stacktrace.NewError("The replacement substring '%s' was not found in the provided match regex '%s' as required.", formatStrReplacementSubstr, patternFormatStr)
+	}
+	if !versionRegex.Match([]byte(newVersion)) {
+		return stacktrace.NewError("The provided version '%s' does not match the version regex '%s'", newVersion, versionRegexStr)
+	}
+
 	fileToUpdateMode := fileToUpdateInfo.Mode()
-	fileToUpdate, err := os.ReadFile(toUpdateFilepath)
+	fileToUpdateBytes, err := os.ReadFile(toUpdateFilepath)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read file at '%s'", toUpdateFilepath)
-	}
-
-	if !strings.Contains(patternFormatStr, formatStrReplacementSubstr) {
-		return stacktrace.NewError("The replacement substring '%s' was not found in the passed '%s' as required.", formatStrReplacementSubstr, patternFormatStr)
-	}
-
-	if !versionRegex.Match([]byte(newVersion)) {
-		return stacktrace.NewError("The version regex pattern, '%s', was not found in the provided version, '%s'", versionRegexStr, newVersion)
 	}
 
 	searchPatternStr := fmt.Sprintf(patternFormatStr, versionRegexStr)
 	searchPatternRegex, err := regexp.Compile(searchPatternStr)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred creating regex pattern of %s", searchPatternStr)
+		return stacktrace.Propagate(err, "An error occurred creating regex pattern of '%s'", searchPatternStr)
 	}
 
 	replaceValue := fmt.Sprintf(patternFormatStr, newVersion)
 
-	numLines, err := helpers.CountLinesMatchingRegex(toUpdateFilepath, searchPatternRegex)
+	matcher := file_line_matcher.FileLineMatcher{}
+	numLines, err := matcher.MatchNumLines(toUpdateFilepath, searchPatternRegex)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to count the number of occurrences of '%s' in '%s'", searchPatternStr, toUpdateFilepath)
 	}
@@ -66,9 +67,10 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.NewError("An incorrect amount, '%d' of lines matching '%s' was found in '%s'. '%d' matching lines were expected.", numLines, searchPatternStr, toUpdateFilepath, expectedNumSearchPatternLines)
 	}
 
-	updatedFile := replaceLinesMatchingPattern(fileToUpdate, searchPatternRegex, replaceValue)
+	// TODO This reads a file of arbitrary size into memory, file should be updated via streaming via Scanner instead
+	updatedFileBytes := replaceLinesMatchingPattern(fileToUpdateBytes, searchPatternRegex, replaceValue)
 
-	err = os.WriteFile(toUpdateFilepath, updatedFile, fileToUpdateMode)
+	err = os.WriteFile(toUpdateFilepath, updatedFileBytes, fileToUpdateMode)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to right the updated file contents to '%s'", toUpdateFilepath)
 	}
@@ -76,10 +78,11 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func replaceLinesMatchingPattern(file []byte, regexPat *regexp.Regexp, replacement string) []byte {
+	// TODO This reads a file of arbitrary size into memory, file should be updated via streaming via Scanner instead
 	lines := bytes.Split(file, []byte("\n"))
 	for i, line := range lines {
 		if regexPat.Match(line) {
-			lines[i] = []byte(replacement)
+			lines[i] = regexPat.ReplaceAll(line, []byte(replacement))
 		}
 	}
 	return bytes.Join(lines, []byte("\n"))

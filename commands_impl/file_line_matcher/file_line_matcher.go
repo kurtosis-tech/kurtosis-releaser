@@ -1,4 +1,4 @@
-package helpers
+package file_line_matcher
 
 import (
 	"bufio"
@@ -7,7 +7,9 @@ import (
 	"regexp"
 )
 
-func CountLinesMatchingRegex(filePath string, regexPat *regexp.Regexp) (int, error) {
+type FileLineMatcher struct{}
+
+func (matcher *FileLineMatcher) MatchNumLines(filePath string, regexPat *regexp.Regexp) (int, error) {
 	numLinesMatchingPattern := 0
 	file, err := os.Open(filePath)
 	if err != nil {

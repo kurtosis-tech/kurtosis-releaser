@@ -9,7 +9,7 @@ import (
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/kurtosis-tech/kudet/helpers"
+	"github.com/kurtosis-tech/kudet/commands_impl/file_line_matcher"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -169,15 +169,16 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Conduct changelog file validation
+	matcher := file_line_matcher.FileLineMatcher{}
 	changelogFilepath := path.Join(currentWorkingDirpath, relChangelogFilepath)
-	tbdHeaderCount, err := helpers.CountLinesMatchingRegex(changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex)
+	tbdHeaderCount, err := matcher.MatchNumLines(changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex.String())
 	}
 	if tbdHeaderCount != expectedNumTBDHeaderLines {
 		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.", expectedNumTBDHeaderLines, tbdHeaderCount)
 	}
-	versionHeaderCount, err := helpers.CountLinesMatchingRegex(changelogFilepath, versionHeaderRegex)
+	versionHeaderCount, err := matcher.MatchNumLines(changelogFilepath, versionHeaderRegex)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, versionHeaderRegex.String())
 	}
