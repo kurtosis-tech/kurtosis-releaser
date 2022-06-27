@@ -79,7 +79,7 @@ func replaceLinesMatchingPattern(file []byte, regexPat *regexp.Regexp, replaceme
 	lines := bytes.Split(file, []byte("\n"))
 	for i, line := range lines {
 		if regexPat.Match(line) {
-			lines[i] = []byte(replacement)
+			lines[i] = regexPat.ReplaceAll(line, []byte(replacement))
 		}
 	}
 	return bytes.Join(lines, []byte("\n"))

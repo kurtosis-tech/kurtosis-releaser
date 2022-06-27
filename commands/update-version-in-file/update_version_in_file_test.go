@@ -45,7 +45,7 @@ KURTOSIS_CORE_VERSION: string = "0.1.3"
 	require.Equal(t, string(updatedFileBytes), updatedFileWithReplacedLine)
 }
 
-func TestMultipleMatchingPatternsFoundReturnsUpdatesLines(t *testing.T) {
+func TestMultipleMatchingPatternsFoundReturnsUpdatedLines(t *testing.T) {
 	replacementStr := "KURTOSIS_CORE_VERSION: string = \"0.1.3\""
 	searchPatternStr := fmt.Sprintf("KURTOSIS_CORE_VERSION: string = \"%s\"", versionRegexStr)
 	searchPatternRegex := regexp.MustCompile(searchPatternStr)
