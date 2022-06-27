@@ -3,7 +3,7 @@ package updateversioninfile
 import (
 	"bytes"
 	"fmt"
-	"github.com/kurtosis-tech/kudet/helpers"
+	"github.com/kurtosis-tech/kudet/commands_impl/file_line_matcher"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/spf13/cobra"
 	"os"
@@ -58,7 +58,8 @@ func run(cmd *cobra.Command, args []string) error {
 
 	replaceValue := fmt.Sprintf(patternFormatStr, newVersion)
 
-	numLines, err := helpers.CountLinesMatchingRegex(toUpdateFilepath, searchPatternRegex)
+	matcher := file_line_matcher.FileLineMatcher{}
+	numLines, err := matcher.MatchNumLines(toUpdateFilepath, searchPatternRegex)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while trying to count the number of occurrences of '%s' in '%s'", searchPatternStr, toUpdateFilepath)
 	}
