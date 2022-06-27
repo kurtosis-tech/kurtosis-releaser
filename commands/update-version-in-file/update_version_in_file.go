@@ -22,7 +22,8 @@ var versionRegex = regexp.MustCompile(versionRegexStr)
 
 var UpdateVersionInFileCmd = &cobra.Command{
 	Use:   updateVersionInFileCmdStr,
-	Short: "Updates semantic version of a Kurtosis Repo in file",
+	Short: "Updates version line",
+	Long:  "Updates line in a file containing a Kurtosis repo version to a new version",
 	Args:  cobra.ExactArgs(3),
 	RunE:  run,
 }
@@ -36,24 +37,23 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		return stacktrace.Propagate(err, "An error occurred attempting to retrieve file info for file at '%s'", toUpdateFilepath)
 	}
+	if !strings.Contains(patternFormatStr, formatStrReplacementSubstr) {
+		return stacktrace.NewError("The replacement substring '%s' was not found in the provided match regex '%s' as required.", formatStrReplacementSubstr, patternFormatStr)
+	}
+	if !versionRegex.Match([]byte(newVersion)) {
+		return stacktrace.NewError("The provided version '%s' does not match the version regex '%s'", newVersion, versionRegexStr)
+	}
+
 	fileToUpdateMode := fileToUpdateInfo.Mode()
-	fileToUpdate, err := os.ReadFile(toUpdateFilepath)
+	fileToUpdateBytes, err := os.ReadFile(toUpdateFilepath)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to read file at '%s'", toUpdateFilepath)
-	}
-
-	if !strings.Contains(patternFormatStr, formatStrReplacementSubstr) {
-		return stacktrace.NewError("The replacement substring '%s' was not found in the passed '%s' as required.", formatStrReplacementSubstr, patternFormatStr)
-	}
-
-	if !versionRegex.Match([]byte(newVersion)) {
-		return stacktrace.NewError("The version regex pattern, '%s', was not found in the provided version, '%s'", versionRegexStr, newVersion)
 	}
 
 	searchPatternStr := fmt.Sprintf(patternFormatStr, versionRegexStr)
 	searchPatternRegex, err := regexp.Compile(searchPatternStr)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred creating regex pattern of %s", searchPatternStr)
+		return stacktrace.Propagate(err, "An error occurred creating regex pattern of '%s'", searchPatternStr)
 	}
 
 	replaceValue := fmt.Sprintf(patternFormatStr, newVersion)
@@ -66,9 +66,9 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.NewError("An incorrect amount, '%d' of lines matching '%s' was found in '%s'. '%d' matching lines were expected.", numLines, searchPatternStr, toUpdateFilepath, expectedNumSearchPatternLines)
 	}
 
-	updatedFile := replaceLinesMatchingPattern(fileToUpdate, searchPatternRegex, replaceValue)
+	updatedFileBytes := replaceLinesMatchingPattern(fileToUpdateBytes, searchPatternRegex, replaceValue)
 
-	err = os.WriteFile(toUpdateFilepath, updatedFile, fileToUpdateMode)
+	err = os.WriteFile(toUpdateFilepath, updatedFileBytes, fileToUpdateMode)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred attempting to right the updated file contents to '%s'", toUpdateFilepath)
 	}

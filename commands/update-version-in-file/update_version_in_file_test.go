@@ -1,6 +1,7 @@
 package updateversioninfile
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"regexp"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func TestNoMatchingPatternFoundReturnsIdenticalFile(t *testing.T) {
 	replacementStr := "KURTOSIS_CORE_VERSION: string = \"0.1.3\""
-	searchPatternStr := "KURTOSIS_CORE_VERSION: string = \"[0-9A-Za-z_./-]+\""
+	searchPatternStr := fmt.Sprintf("KURTOSIS_CORE_VERSION: string = \"%s\"", versionRegexStr)
 	searchPatternRegex := regexp.MustCompile(searchPatternStr)
 
 	fileWithNoMatchingPattern :=
@@ -24,7 +25,7 @@ func TestNoMatchingPatternFoundReturnsIdenticalFile(t *testing.T) {
 
 func TestMatchingPatternFoundReturnsUpdatedLine(t *testing.T) {
 	replacementStr := "KURTOSIS_CORE_VERSION: string = \"0.1.3\""
-	searchPatternStr := "KURTOSIS_CORE_VERSION: string = \"[0-9A-Za-z_./-]+\""
+	searchPatternStr := fmt.Sprintf("KURTOSIS_CORE_VERSION: string = \"%s\"", versionRegexStr)
 	searchPatternRegex := regexp.MustCompile(searchPatternStr)
 
 	fileWithMatchingPattern :=
@@ -46,7 +47,7 @@ KURTOSIS_CORE_VERSION: string = "0.1.3"
 
 func TestMultipleMatchingPatternsFoundReturnsUpdatesLines(t *testing.T) {
 	replacementStr := "KURTOSIS_CORE_VERSION: string = \"0.1.3\""
-	searchPatternStr := "KURTOSIS_CORE_VERSION: string = \"[0-9A-Za-z_./-]+\""
+	searchPatternStr := fmt.Sprintf("KURTOSIS_CORE_VERSION: string = \"%s\"", versionRegexStr)
 	searchPatternRegex := regexp.MustCompile(searchPatternStr)
 
 	fileWithMultipleLinesMatchingPattern :=
