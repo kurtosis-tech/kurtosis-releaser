@@ -83,3 +83,5 @@ node_modules
 yarn-error.log
 
 dist/
+
+.pre-release-scripts.txt
