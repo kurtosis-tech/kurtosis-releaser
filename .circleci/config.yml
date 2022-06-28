@@ -47,7 +47,7 @@ jobs:
       # Cache our dependencies
       - restore_cache:
           keys:
-            - << pipeline.parameters.kudet-build-cache-key-prefix >>-{{ checksum "kudet/go.sum" }}
+            - << pipeline.parameters.kudet-build-cache-key-prefix >>-{{ checksum "go.sum" }}
 
       - run: |
           git config --global url."https://${KURTOSISBOT_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
@@ -55,7 +55,7 @@ jobs:
           scripts/build.sh
 
       - save_cache:
-          key: << pipeline.parameters.kudet-build-cache-key-prefix >>-{{ checksum "kudet/go.sum" }}
+          key: << pipeline.parameters.kudet-build-cache-key-prefix >>-{{ checksum "go.sum" }}
           paths:
             - "/go/pkg/mod"   # Go module cache for the Goreleaser image, as reported by "go env GOMODCACHE"
             - "/root/.cache/go-build"    # Go build cache for the Goreleaser image, as reported by "go env GOCACHE"
