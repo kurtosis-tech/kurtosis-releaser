@@ -3,6 +3,7 @@ package commands
 import (
 	"github.com/kurtosis-tech/kudet/commands/get-docker-tag"
 	"github.com/kurtosis-tech/kudet/commands/release"
+	"github.com/kurtosis-tech/kudet/commands/update-version-in-file"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -37,6 +38,7 @@ func init() {
 
 	RootCmd.AddCommand(release.ReleaseCmd)
 	RootCmd.AddCommand(getdockertag.GetDockerTagCmd)
+	RootCmd.AddCommand(updateversioninfile.UpdateVersionInFileCmd)
 }
 
 // ====================================================================================================
