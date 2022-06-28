@@ -9,7 +9,7 @@ import (
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/kurtosis-tech/kudet/commands_impl/file_line_matcher"
+	"github.com/kurtosis-tech/kudet/commands_shared_code/file_line_matcher"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
