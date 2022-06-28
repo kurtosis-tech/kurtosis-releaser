@@ -94,7 +94,7 @@ workflows:
               ignore:
                 - develop
                 - master
-      - push_cli_artifacts:
+      - push_kudet_artifacts:
           context:
             - github-user
             - gemfury-publisher
