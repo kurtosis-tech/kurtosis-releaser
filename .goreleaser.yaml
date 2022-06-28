@@ -22,6 +22,10 @@ archives:
     builds:
       - kudet
     files:
+      # Kurtosis is a private repo so we don't want to package any files except the binaries, but GoReleaser by default packages the README, LICENSE, and changelog
+      # Worse, setting this to be emptylist won't work because GoReleaser takes emptylist to mean "package the defaults" per:
+      #  https://github.com/goreleaser/goreleaser/blob/73641c71ac0d9f78e2409b0cea1bf5b42111b933/internal/pipe/archive/archive.go#L61
+      # Therefore, we set this to a glob of files that definitely don't exist
       - "*THIS_FILE_DOES_NOT_EXIST*"
     name_template: kudet_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 
@@ -48,6 +52,16 @@ nfpms:
       - apk
     maintainer: Kurtosis Technologies Inc. <hello@kurtosistech.com>
 
+# In order for Homebrew to work, we have to create a repo where the Kudet release artifacts will be uploaded
+release:
+  github:
+    owner: kurtosis-tech
+    name: kudet-release-artifacts
+
+  ids:
+    - kudet
+    - kudet-linux-packages
+
 brews:
   - name: kudet
     ids:
@@ -70,16 +84,8 @@ brews:
     install: |
       bin.install "kurtosis"
 
-release:
-    github:
-      owner: kurtosis-tech
-      name: kudet-release-artifacts
-
-    ids:
-      - kudet
-      - kudet-linux-packages
-
 publishers:
+  # inspired by https://netdevops.me/2021/building-and-publishing-deb/rpm-packages-with-goreleaser-and-gemfury/
   - name: fury.io
     ids:
       - deb-and-rpm-packages
