@@ -22,7 +22,7 @@ parameters:
   # The dirpath where kudet dist subdirectories are found, relative to the workspace root
   kudet-dist-home-relative-dirpath:
     type: string
-    default: "kudet/dist"
+    default: "dist"
   # The key that the kudet build cache will get
   # We can bump the version here if we ever need to bust the cache
   kudet-build-cache-key-prefix:
