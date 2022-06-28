@@ -1,9 +1,8 @@
 package updateversioninfile
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/kurtosis-tech/kudet/commands_impl/file_line_matcher"
+	"github.com/kurtosis-tech/kudet/commands_shared_code/file_line_matcher"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/spf13/cobra"
 	"os"
@@ -78,12 +77,5 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func replaceLinesMatchingPattern(file []byte, regexPat *regexp.Regexp, replacement string) []byte {
-	// TODO This reads a file of arbitrary size into memory, file should be updated via streaming via Scanner instead
-	lines := bytes.Split(file, []byte("\n"))
-	for i, line := range lines {
-		if regexPat.Match(line) {
-			lines[i] = regexPat.ReplaceAll(line, []byte(replacement))
-		}
-	}
-	return bytes.Join(lines, []byte("\n"))
+	return regexPat.ReplaceAll(file, []byte(replacement))
 }
