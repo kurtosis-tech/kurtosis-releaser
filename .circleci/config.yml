@@ -64,7 +64,6 @@ jobs:
           root: .
           paths:
             - "./<< pipeline.parameters.kudet-dist-home-relative-dirpath >>"
-
   push_kudet_artifacts:
     docker:
       - image: "goreleaser/goreleaser:<< pipeline.parameters.goreleaser-version >>"
@@ -101,6 +100,6 @@ workflows:
             - gemfury-publisher
           filters:
             branches:
-#              ignore: /.*/
+              ignore: /.*/
             tags:
               only: /^[0-9]+\.[0-9]+\.[0-9]+$/
