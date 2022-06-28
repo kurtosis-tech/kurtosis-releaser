@@ -36,6 +36,9 @@ fi
 # ==================================================================================================
 #                                             Main Logic
 # ==================================================================================================
+
+# This logic is actually just `kudet get-docker-tag` but we can't use kudet to build kudet
+# in every other Kurtosis repo, this logic is done using `kudet get-docker-tag`
 # Captures the first of tag > commit
 if ! git_ref="$(git describe --tags --exact-match 2> /dev/null || git rev-parse --short HEAD)"; then
     echo "Error: Couldn't get a Git ref to use for a Docker tag" >&2
