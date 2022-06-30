@@ -4,4 +4,3 @@ kudet - pronounced cadet - stands for (ku)rtosis (de)veloper (t)ools. It is a cl
 
 Run `kudet -h` to see available commands.
 
-Install `kudet` through `brew install kurtosis-tech/tap/kudet`
