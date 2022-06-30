@@ -8,4 +8,4 @@ Run `kudet -h` to see available commands.
 
 `brew install kurtosis-tech/tap/kudet`
 
-
+`sudo apt install kudet`
