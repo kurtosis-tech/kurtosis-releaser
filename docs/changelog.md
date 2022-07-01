@@ -7,8 +7,7 @@
 * Fix goreleaser config by changing from bin.install kurtosis -> bin.install kudet
 
 # 0.1.2
-* Update circle ci configuration 
-
+* Update circle ci configuration to not push artifacts on PR branches
 
 # 0.1.1
 * Add necessary versioning tools
