@@ -80,6 +80,14 @@ var ReleaseCmd = &cobra.Command{
 }
 
 func run(cmd *cobra.Command, args []string) error {
+	logrus.Infof("Setting up authentication using provided token...")
+	token := os.Args[2]
+	fmt.Println(token)
+	gitAuth := &http.BasicAuth{
+		Username: "kudet", // username doesn't matter
+		Password: token,
+	}
+
 	logrus.Infof("Starting release process...")
 	currentWorkingDirpath, err := os.Getwd()
 	if err != nil {
@@ -111,13 +119,6 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
 	}
 
-	logrus.Infof("Setting up authentication using provided token...")
-	token := os.Args[1]
-	gitAuth := &http.BasicAuth{
-		Username: "kudet", // username doesn't matter
-		Password: token,
-	}
-
 	logrus.Infof("Conducting pre release checks...")
 	worktree, err := repository.Worktree()
 	if err != nil {
@@ -142,7 +143,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.Propagate(err, "An error occurred while determining if we should fetch from '%s'", lastFetchedFilepath)
 	}
 	if shouldFetch {
-		fetchOpts := &git.FetchOptions{RemoteName: originRemoteName}
+		fetchOpts := &git.FetchOptions{RemoteName: originRemoteName, Auth: gitAuth}
 		if err := originRemote.Fetch(fetchOpts); err != nil && err != git.NoErrAlreadyUpToDate {
 			return stacktrace.Propagate(err, "An error occurred fetching from the remote repository.")
 		}
