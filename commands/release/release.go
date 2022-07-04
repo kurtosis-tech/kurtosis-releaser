@@ -112,7 +112,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	logrus.Infof("Setting up authentication using provided token...")
-	token := "github personal access token"
+	token := os.Args[1]
 	gitAuth := &http.BasicAuth{
 		Username: "kudet", // username doesn't matter
 		Password: token,
