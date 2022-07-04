@@ -84,7 +84,7 @@ func run(cmd *cobra.Command, args []string) error {
 	token := os.Args[2]
 	fmt.Println(token)
 	gitAuth := &http.BasicAuth{
-		Username: "kudet", // username doesn't matter
+		Username: "git", // username doesn't matter
 		Password: token,
 	}
 
@@ -322,7 +322,7 @@ func run(cmd *cobra.Command, args []string) error {
 			}
 			err = repository.Push(deleteVPrefixedReleaseTagPushOpts)
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to delete tag '%s' from '%s'. Please run 'git push --delete %s %s' to delete the tag manually.", vReleaseTag, remoteMasterBranchName, remoteMasterBranchName, vReleaseTag)
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to delete tag '%s' from '%s'. Please run 'git push --delete %s %s' to delete the tag manually.", vReleaseTag, originRemoteName, originRemoteName, vReleaseTag)
 			}
 		}
 	}()
