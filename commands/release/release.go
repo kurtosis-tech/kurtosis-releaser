@@ -9,6 +9,7 @@ import (
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/kurtosis-tech/kudet/commands_shared_code/file_line_matcher"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
@@ -108,6 +109,13 @@ func run(cmd *cobra.Command, args []string) error {
 	originRemote, err := repository.Remote(originRemoteName)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting remote '%v' for repository; is the code pushed?", originRemoteName)
+	}
+
+	logrus.Infof("Setting up authentication using provided token...")
+	token := "github personal access token"
+	gitAuth := &http.BasicAuth{
+		Username: "kudet", // username doesn't matter
+		Password: token,
 	}
 
 	logrus.Infof("Conducting pre release checks...")
@@ -296,6 +304,7 @@ func run(cmd *cobra.Command, args []string) error {
 	pushVPrefixedReleaseTagOpts := &git.PushOptions{
 		RemoteName: originRemoteName,
 		RefSpecs:   []config.RefSpec{config.RefSpec(vReleaseTagRefSpec)},
+		Auth:       gitAuth,
 	}
 	if err = repository.Push(pushVPrefixedReleaseTagOpts); err != nil {
 		logrus.Errorf("An error occurred while pushing release tag: '%s' to '%s'.", vReleaseTag, remoteMasterBranchName)
@@ -308,16 +317,17 @@ func run(cmd *cobra.Command, args []string) error {
 			deleteVPrefixedReleaseTagPushOpts := &git.PushOptions{
 				RemoteName: originRemoteName,
 				RefSpecs:   []config.RefSpec{config.RefSpec(emptyVReleaseTagRefSpec)},
+				Auth:       gitAuth,
 			}
 			err = repository.Push(deleteVPrefixedReleaseTagPushOpts)
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to delete tag '%s' from '%s'. Please run 'git push --delete %s %s' to delete the tag manually.", vReleaseTag, originRemote, originRemote, vReleaseTag)
+				logrus.Errorf("ACTION REQUIRED: An error occurred attempting to delete tag '%s' from '%s'. Please run 'git push --delete %s %s' to delete the tag manually.", vReleaseTag, remoteMasterBranchName, remoteMasterBranchName, vReleaseTag)
 			}
 		}
 	}()
 
 	logrus.Infof("Pushing release changes to '%s'...", remoteMasterBranchName)
-	pushCommitOpts := &git.PushOptions{RemoteName: originRemoteName}
+	pushCommitOpts := &git.PushOptions{RemoteName: originRemoteName, Auth: gitAuth}
 	if err = repository.Push(pushCommitOpts); err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s'", remoteMasterBranchName)
 	}
@@ -333,6 +343,7 @@ func run(cmd *cobra.Command, args []string) error {
 	pushReleaseTagOpts := &git.PushOptions{
 		RemoteName: originRemoteName,
 		RefSpecs:   []config.RefSpec{config.RefSpec(releaseTagRefSpec)},
+		Auth:       gitAuth,
 	}
 	if err = repository.Push(pushReleaseTagOpts); err != nil {
 		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'", releaseTag, remoteMasterBranchName)
