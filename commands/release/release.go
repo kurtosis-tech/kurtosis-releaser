@@ -82,7 +82,6 @@ var ReleaseCmd = &cobra.Command{
 func run(cmd *cobra.Command, args []string) error {
 	logrus.Infof("Setting up authentication using provided token...")
 	token := os.Args[2]
-	fmt.Println(token)
 	gitAuth := &http.BasicAuth{
 		Username: "git", // username doesn't matter
 		Password: token,
