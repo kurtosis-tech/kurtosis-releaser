@@ -51,9 +51,9 @@ const (
 	noPreviousVersion                 = "0.0.0"
 	semverRegexStr                    = "^[0-9]+.[0-9]+.[0-9]+$"
 
-	releaseCmdStr            = "release"
-	bumpMajorFlagDefaultVal  = false
-	bumpMajorVersionShortStr = ""
+	releaseCmdStr           = "release"
+	bumpMajorFlagDefaultVal = false
+	bumpMajorFlagShortStr   = ""
 )
 
 var (
