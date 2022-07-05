@@ -73,10 +73,17 @@ var (
 	`
 )
 
+var shouldBumpMajorVersion bool
 var ReleaseCmd = &cobra.Command{
 	Use:   releaseCmdStr,
 	Short: "Cuts a new release on the repo",
+	Long:  "Cuts a new release on a Kurtosis Repo. This command is intended to be ran in a github action and requires a release token to authenticate pushes to master.",
+	Args:  cobra.ExactArgs(1),
 	RunE:  run,
+}
+
+func init() {
+	ReleaseCmd.Flags().BoolVarP(&shouldBumpMajorVersion, "bump-major", "", false, "should bump the major version for this release")
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -200,15 +207,19 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the latest release version.")
 	}
-	hasBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist in the changelog at '%s'", changelogFilepath)
-	}
 	var nextReleaseVersion semver.Version
-	if hasBreakingChanges {
-		nextReleaseVersion = latestReleaseVersion.IncMinor()
+	if shouldBumpMajorVersion {
+		nextReleaseVersion = latestReleaseVersion.IncMajor()
 	} else {
-		nextReleaseVersion = latestReleaseVersion.IncPatch()
+		hasBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
+		if err != nil {
+			return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist in the changelog at '%s'", changelogFilepath)
+		}
+		if hasBreakingChanges {
+			nextReleaseVersion = latestReleaseVersion.IncMinor()
+		} else {
+			nextReleaseVersion = latestReleaseVersion.IncPatch()
+		}
 	}
 
 	logrus.Infof("VERIFICATION: Release new version '%s'? (ENTER to continue, Ctrl-C to quit)", nextReleaseVersion.String())
