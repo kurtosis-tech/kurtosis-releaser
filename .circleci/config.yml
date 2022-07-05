@@ -1,0 +1,105 @@
+version: 2.1
+
+orbs:
+  kurtosis-docs-checker: kurtosis-tech/docs-checker@0.2.0
+
+executors:
+  ubuntu_vm:
+    machine:
+      image: ubuntu-2004:202201-02
+
+parameters:
+  # To upgrade the Docker Engine version, see which versions are supported at: https://circleci.com/docs/2.0/building-docker-images/#docker-version
+  docker-engine-version:
+    type: string
+    default: 20.10.7
+  cimg-base-version:
+    type: string
+    default: 2021.11-20.04
+  goreleaser-version:
+    type: string
+    default: "v1.9.2"
+  # The dirpath where kudet dist subdirectories are found, relative to the workspace root
+  kudet-dist-home-relative-dirpath:
+    type: string
+    default: "dist"
+  # The key that the kudet build cache will get
+  # We can bump the version here if we ever need to bust the cache
+  kudet-build-cache-key-prefix:
+    type: string
+    default: "kudet-go-mod-v1"
+
+# NOTE: Because CircleCI jobs run on separate machines from each other, we duplicate steps (like checkout) between jobs. This is because doing the "correct" DRY
+#  refactoring of, "one job for checkout, one job for build Docker image, etc." would require a) persisting files between jobs and b) persisting Docker images between
+#  jobs. Both are annoying (saving/loading workspaces require re-downloading the workspace over the network, and there doesn't seem to be a good way to do Docker
+#  images), so we run everything inside a single job.
+# See also: https://discuss.circleci.com/t/can-docker-images-be-preserved-between-jobs-in-a-workflow-without-a-manual-load-save/23388/12
+jobs:
+  build_kudet:
+    docker:
+      - image: "goreleaser/goreleaser:<< pipeline.parameters.goreleaser-version >>"
+    resource_class: large
+    steps:
+      - checkout
+      # The 'git config' and 'go env' steps are to allow Go to read modules from our private Github repos
+      # The KURTOSISBOT_GITHUB_TOKEN is a secret provided at CI build time
+
+      # Cache our dependencies
+      - restore_cache:
+          keys:
+            - << pipeline.parameters.kudet-build-cache-key-prefix >>-{{ checksum "go.sum" }}
+
+      - run: |
+          git config --global url."https://${KURTOSISBOT_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+          go env -w "GOPRIVATE=github.com/kurtosis-tech/*"
+          scripts/build.sh
+
+      - save_cache:
+          key: << pipeline.parameters.kudet-build-cache-key-prefix >>-{{ checksum "go.sum" }}
+          paths:
+            - "/go/pkg/mod"   # Go module cache for the Goreleaser image, as reported by "go env GOMODCACHE"
+            - "/root/.cache/go-build"    # Go build cache for the Goreleaser image, as reported by "go env GOCACHE"
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - "./<< pipeline.parameters.kudet-dist-home-relative-dirpath >>"
+  push_kudet_artifacts:
+    docker:
+      - image: "goreleaser/goreleaser:<< pipeline.parameters.goreleaser-version >>"
+    steps:
+      - checkout
+      # The 'git config' and 'go env' steps are to allow Go to read modules from our private Github repos
+      # The KURTOSISBOT_GITHUB_TOKEN is a secret provided at CI build time
+      - run: |
+          git config --global url."https://${KURTOSISBOT_GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+          go env -w "GOPRIVATE=github.com/kurtosis-tech/*"
+          scripts/build.sh true
+
+workflows:
+  build:
+    jobs:
+      - kurtosis-docs-checker/check-docs:
+          markdown-link-check-config-json: "{}"
+          filters:
+            branches:
+              ignore:
+                - develop
+                - master
+      - build_kudet:
+          context:
+            - github-user
+          filters:
+            branches:
+              ignore:
+                - develop
+                - master
+      - push_kudet_artifacts:
+          context:
+            - github-user
+            - gemfury-publisher
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^[0-9]+\.[0-9]+\.[0-9]+$/

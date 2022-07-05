@@ -7,7 +7,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/kurtosis-tech/stacktrace"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"os"
 	"path"
@@ -32,7 +31,6 @@ var GetDockerTagCmd = &cobra.Command{
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	logrus.Infof("Retrieving git information...")
 	currentWorkingDirpath, err := os.Getwd()
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred getting the current working directory.")
