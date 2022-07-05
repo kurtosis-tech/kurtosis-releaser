@@ -1,5 +1,8 @@
 # TBD
 
+# 0.1.5
+* Require authentication through personal access token for release command
+* 
 # 0.1.4
 * Update goreleaser config to latest version of goreleaser
 
