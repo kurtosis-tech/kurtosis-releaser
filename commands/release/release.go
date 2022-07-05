@@ -51,7 +51,9 @@ const (
 	noPreviousVersion                 = "0.0.0"
 	semverRegexStr                    = "^[0-9]+.[0-9]+.[0-9]+$"
 
-	releaseCmdStr = "release"
+	releaseCmdStr            = "release"
+	bumpMajorFlagDefaultVal  = false
+	bumpMajorVersionShortStr = ""
 )
 
 var (
@@ -77,13 +79,13 @@ var shouldBumpMajorVersion bool
 var ReleaseCmd = &cobra.Command{
 	Use:   releaseCmdStr,
 	Short: "Cuts a new release on the repo",
-	Long:  "Cuts a new release on a Kurtosis Repo. This command is intended to be ran in a github action and requires a release token to authenticate pushes to master.",
+	Long:  "Cuts a new release on a Kurtosis Repo. This command is intended to be ran in a Github action and requires a release token to authenticate pushes to master.",
 	Args:  cobra.ExactArgs(1),
 	RunE:  run,
 }
 
 func init() {
-	ReleaseCmd.Flags().BoolVarP(&shouldBumpMajorVersion, "bump-major", "", false, "should bump the major version for this release")
+	ReleaseCmd.Flags().BoolVarP(&shouldBumpMajorVersion, "bump-major", bumpMajorFlagShortStr, bumpMajorFlagDefaultVal, "If set, in place of doing version autodetection based on the changelog, the major version (\"X\" in X.Y.Z) will be bumped")
 }
 
 func run(cmd *cobra.Command, args []string) error {
