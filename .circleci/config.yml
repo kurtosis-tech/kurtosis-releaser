@@ -13,12 +13,9 @@ parameters:
   docker-engine-version:
     type: string
     default: 20.10.7
-  cimg-base-version:
+  go-version:
     type: string
-    default: 2021.11-20.04
-  goreleaser-version:
-    type: string
-    default: "v1.9.2"
+    default: "1.17"
   # The dirpath where kudet dist subdirectories are found, relative to the workspace root
   kudet-dist-home-relative-dirpath:
     type: string
@@ -37,9 +34,14 @@ parameters:
 jobs:
   build_kudet:
     docker:
-      - image: "goreleaser/goreleaser:<< pipeline.parameters.goreleaser-version >>"
+      - image: "cimg/go:<< pipeline.parameters.go-version >>"
     resource_class: large
     steps:
+      # Install goreleaser
+      - run: |
+          echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
+          sudo apt update
+          sudo apt install goreleaser
       - checkout
       # The 'git config' and 'go env' steps are to allow Go to read modules from our private Github repos
       # The KURTOSISBOT_GITHUB_TOKEN is a secret provided at CI build time
@@ -66,8 +68,13 @@ jobs:
             - "./<< pipeline.parameters.kudet-dist-home-relative-dirpath >>"
   push_kudet_artifacts:
     docker:
-      - image: "goreleaser/goreleaser:<< pipeline.parameters.goreleaser-version >>"
+      - image: "cimg/go:<< pipeline.parameters.go-version >>"
     steps:
+      # Install goreleaser
+      - run: |
+          echo 'deb [trusted=yes] https://repo.goreleaser.com/apt/ /' | sudo tee /etc/apt/sources.list.d/goreleaser.list
+          sudo apt update
+          sudo apt install goreleaser
       - checkout
       # The 'git config' and 'go env' steps are to allow Go to read modules from our private Github repos
       # The KURTOSISBOT_GITHUB_TOKEN is a secret provided at CI build time
@@ -84,7 +91,6 @@ workflows:
           filters:
             branches:
               ignore:
-                - develop
                 - master
       - build_kudet:
           context:
@@ -92,7 +98,6 @@ workflows:
           filters:
             branches:
               ignore:
-                - develop
                 - master
       - push_kudet_artifacts:
           context:
