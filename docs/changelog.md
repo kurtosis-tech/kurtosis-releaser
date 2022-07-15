@@ -1,5 +1,6 @@
 # TBD
 
+# Changes
 * Add flag to bump major version for release command
 * Migrate repo to use new release workflow
 * Merge `develop` into `master`
