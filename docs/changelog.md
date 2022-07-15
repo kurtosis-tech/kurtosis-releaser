@@ -1,9 +1,11 @@
 # TBD
 
 # Changes
-* Add flag to bump major version for release command
 * Migrate repo to use new release workflow
 * Merge `develop` into `master`
+
+# 0.1.6
+* Add flag to bump major version for release command
 
 # 0.1.5
 * Require authentication through personal access token for release command
