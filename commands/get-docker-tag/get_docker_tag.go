@@ -15,14 +15,16 @@ import (
 )
 
 const (
-	gitDirname                 = ".git"
-	abbrevCommitLength         = 6
-	dirtySuffix                = "-dirty"
-	getDockerTagCmdStr         = "get-docker-tag"
-	invalidDockerCharsRegexStr = "[^a-zA-Z0-9]"
+	gitDirname         = ".git"
+	abbrevCommitLength = 6
+	dirtySuffix        = "-dirty"
+	getDockerTagCmdStr = "get-docker-tag"
+
+	// Rules on valid docker images: https://docs.docker.com/engine/reference/commandline/tag
+	invalidDockerImgCharsRegexStr = "[^a-zA-Z0-9._-]|^\\.|^-"
 )
 
-var invalidDockerCharsRegex = regexp.MustCompile(invalidDockerCharsRegexStr)
+var invalidDockerCharsRegex = regexp.MustCompile(invalidDockerImgCharsRegexStr)
 
 var GetDockerTagCmd = &cobra.Command{
 	Use:   getDockerTagCmdStr,
