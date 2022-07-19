@@ -1,8 +1,11 @@
 # TBD
 
-# Changes
+### Changes
 * Migrate repo to use new release workflow
 * Merge `develop` into `master`
+
+### Fixes
+* Fix `invalidDockerImgCharsRegex` in `get-docker-tag`
 
 # 0.1.6
 * Add flag to bump major version for release command
