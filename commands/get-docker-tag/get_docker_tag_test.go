@@ -22,11 +22,11 @@ func testRegexPattern(t *testing.T, regexPatternName string, regexPatternStr str
 
 	for _, str := range validStrings {
 		patternDetected := regexPattern.Match([]byte(str))
-		require.True(t, patternDetected, "%s Pattern was not detected in this string when it should have been: '%s'.", regexPatternName, str)
+		require.True(t, patternDetected, "'%s'Pattern was not detected in this string when it should have been: '%s'.", regexPatternName, str)
 	}
 
 	for _, str := range invalidStrings {
 		patternDetected := regexPattern.Match([]byte(str))
-		require.False(t, patternDetected, "%s Pattern was detected in this string when it should not have been: '%s'.", regexPatternName, str)
+		require.False(t, patternDetected, "'%s' Pattern was detected in this string when it should not have been: '%s'.", regexPatternName, str)
 	}
 }
