@@ -44,6 +44,7 @@ const (
 	lastFetchedFileMode                         = 0644
 
 	relChangelogFilepath = "docs/changelog.md"
+	relAPIFolderPath     = "api/"
 
 	expectedNumTBDHeaderLines         = 1
 	versionToBeReleasedPlaceholderStr = "TBD"
@@ -255,10 +256,18 @@ func run(cmd *cobra.Command, args []string) error {
 
 	logrus.Infof("Committing changes locally...")
 	// Commit pre-release changes
-	err = worktree.AddWithOptions(&git.AddOptions{All: true})
-	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while attempting to add release changes to staging area.")
+	// These are the only files that should get changed during the pre-release
+	// &git.AddOptions{All: true} ignores git ignore and adds `kurtosis_version`
+	// TODO figure out a way to use All while respecting the ignore for `kurtosis_version`
+	pathsToAdd := []string{relChangelogFilepath, relAPIFolderPath}
+
+	for _, pathToAdd := range pathsToAdd {
+		err = worktree.AddWithOptions(&git.AddOptions{Glob: pathToAdd})
+		if err != nil {
+			return stacktrace.Propagate(err, "An error occurred while attempting to add '%v' to staging area.", pathsToAdd)
+		}
 	}
+
 	commitMsg := fmt.Sprintf("Finalize changes for release version '%s'", nextReleaseVersion.String())
 	_, err = worktree.Commit(commitMsg, &git.CommitOptions{
 		Author: &object.Signature{
@@ -373,7 +382,9 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 // ====================================================================================================
-//                                       Private Helper Functions
+//
+//	Private Helper Functions
+//
 // ====================================================================================================
 func determineShouldFetch(lastFetchedFilepath string) (bool, error) {
 	lastFetchedUnixTimeStr, err := os.ReadFile(lastFetchedFilepath)
