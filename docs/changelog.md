@@ -1,5 +1,7 @@
 # TBD
 
+# 0.1.8
+
 ### Fixes
 * Fixes how we add files during a release, using a white list of files
 
