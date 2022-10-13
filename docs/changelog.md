@@ -3,6 +3,7 @@
 ### Fixes
 * Adds the package.json changed by the minimal GRPC server during pre-release to staging area
 * Fixes a bug where we try to add a file which doesn't exist that breaks the releae process
+* Adding an 'api/' empty folder to unblock broken kudet release script  
 
 # 0.1.8
 
