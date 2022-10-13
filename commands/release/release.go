@@ -258,13 +258,13 @@ func run(cmd *cobra.Command, args []string) error {
 	// Commit pre-release changes
 	// These are the only files that should get changed during the pre-release
 	// &git.AddOptions{All: true} ignores git ignore and adds `kurtosis_version`
-	// TODO figure out a way to use All while respecting the ignore for `kurtosis_version`
+	// TODO figure out a way to use All while respecting the .gitignore for `kurtosis_version`
 	pathsToAdd := []string{relChangelogFilepath, relAPIFolderPath}
 
 	for _, pathToAdd := range pathsToAdd {
 		err = worktree.AddWithOptions(&git.AddOptions{Glob: pathToAdd})
 		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred while attempting to add '%v' to staging area.", pathsToAdd)
+			return stacktrace.Propagate(err, "An error occurred while attempting to add '%v' to staging area.", pathToAdd)
 		}
 	}
 
