@@ -1,5 +1,7 @@
 # TBD
 
+# 0.1.9
+
 ### Fixes
 * Adds the package.json changed by the minimal GRPC server during pre-release to staging area
 * Fixes a bug where we try to add a file which doesn't exist that breaks the releae process
