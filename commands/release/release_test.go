@@ -122,8 +122,37 @@ func TestDoBreakingChangesExist(t *testing.T) {
 	testBreakingChangesExists(t, shouldHaveBreakingChanges, shouldNotHaveBreakingChanges)
 }
 
+func TestIsWhiteSpaceOrPattern_IdentifiesComment(t *testing.T) {
+	testCase := "# this is a comment"
+	require.True(t, isWhiteSpaceOrComment(testCase))
+}
+
+func TestIsWhiteSpaceOrPattern_IdentifiesPureWhiteSpaceAndNewLines(t *testing.T) {
+	testCases := []string{
+		" ",
+		"    ",
+		"\n  ",
+	}
+	for _, testCase := range testCases {
+		require.True(t, isWhiteSpaceOrComment(testCase))
+	}
+}
+
+func TestIsWhiteSpaceOrPattern_IdentifiesActuallyUsefulIgnores(t *testing.T) {
+	testCases := []string{
+		"kurtosis_version/kurtosis_version.go",
+		" long file with spaces around it ",
+		"*.pyc",
+	}
+	for _, testCase := range testCases {
+		require.False(t, isWhiteSpaceOrComment(testCase))
+	}
+}
+
 // ====================================================================================================
-//                                       Private Helper Functions
+//
+//	Private Helper Functions
+//
 // ====================================================================================================
 func testRegexPattern(t *testing.T, regexPatternName string, regexPatternStr string, validStrings []string, invalidStrings []string) {
 	regexPattern := regexp.MustCompile(regexPatternStr)
