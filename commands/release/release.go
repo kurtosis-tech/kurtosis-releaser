@@ -257,7 +257,7 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.Propagate(err, "An error occurred while updating the changelog file at '%s'", changelogFilepath)
 	}
 
-	logrus.Infof("Committing changes locally...")
+	logrus.Infof("Populating exlcudes for the worktree by parsing the .gitignore file")
 	gitIgnoreFile, err := os.Open(gitIgnoreFileRelPath)
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while reading the '%v' file", gitIgnoreFileRelPath)
@@ -276,6 +276,7 @@ func run(cmd *cobra.Command, args []string) error {
 		worktree.Excludes = append(worktree.Excludes, gitignore.ParsePattern(pattern, emptyDomain))
 	}
 
+	logrus.Infof("Committing changes locally...")
 	err = worktree.AddWithOptions(&git.AddOptions{All: true})
 	if err != nil {
 		return stacktrace.Propagate(err, "An error occurred while adding files to the staging area")
