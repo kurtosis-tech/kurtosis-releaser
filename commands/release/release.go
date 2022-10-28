@@ -8,6 +8,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/kurtosis-tech/kudet/commands_shared_code/file_line_matcher"
@@ -43,9 +44,11 @@ const (
 	extraNanosecondsToAddToLastFetchedTimestamp = 0
 	lastFetchedFileMode                         = 0644
 
-	relChangelogFilepath                      = "docs/changelog.md"
-	relAPIFolderPathForKurtosisMonorepo       = "api/"
-	typeScriptPackageJSONForMinimalGRPCServer = "typescript/package.json"
+	relChangelogFilepath = "docs/changelog.md"
+
+	// this is relative to the root of the target repo
+	gitIgnoreRelFilepath      = ".gitignore"
+	gitIgnoreCommentCharacter = "#"
 
 	expectedNumTBDHeaderLines         = 1
 	versionToBeReleasedPlaceholderStr = "TBD"
@@ -85,6 +88,8 @@ var ReleaseCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE:  run,
 }
+
+var emptyDomain []string = nil
 
 func init() {
 	ReleaseCmd.Flags().BoolVarP(&shouldBumpMajorVersion, "bump-major", bumpMajorFlagShortStr, bumpMajorFlagDefaultVal, "If set, in place of doing version autodetection based on the changelog, the major version (\"X\" in X.Y.Z) will be bumped")
@@ -255,19 +260,30 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.Propagate(err, "An error occurred while updating the changelog file at '%s'", changelogFilepath)
 	}
 
-	logrus.Infof("Committing changes locally...")
-	// Commit pre-release changes
-	// These are the only files that should get changed during the pre-release
-	// &git.AddOptions{All: true} ignores git ignore and adds `kurtosis_version`
-	// TODO figure out a way to use All while respecting the .gitignore for `kurtosis_version`
-	pathsToAdd := []string{relChangelogFilepath, relAPIFolderPathForKurtosisMonorepo, typeScriptPackageJSONForMinimalGRPCServer}
+	// we have to manually populate the excludes because of https://github.com/kurtosis-tech/kudet/issues/22
+	// we should remove this piece when the above issue & bigger go-git issue gets resolved
+	logrus.Infof("Populating excludes for the worktree by parsing the .gitignore file")
+	gitIgnoreFile, err := os.Open(gitIgnoreRelFilepath)
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while reading the '%v' file", gitIgnoreRelFilepath)
+	}
+	defer gitIgnoreFile.Close()
 
-	for _, pathToAdd := range pathsToAdd {
-		err = worktree.AddWithOptions(&git.AddOptions{Glob: pathToAdd})
-		if err != nil {
-			logrus.Warnf("An error occurred while adding '%v' does it even exist?", pathToAdd)
-			logrus.Warn("You are probably hitting https://github.com/kurtosis-tech/kudet/issues/22")
+	gitIgnoreFileScanner := bufio.NewScanner(gitIgnoreFile)
+	// split the file by lines
+	gitIgnoreFileScanner.Split(bufio.ScanLines)
+	for gitIgnoreFileScanner.Scan() {
+		pattern := gitIgnoreFileScanner.Text()
+		if isWhiteSpaceOrComment(pattern) {
+			continue
 		}
+		worktree.Excludes = append(worktree.Excludes, gitignore.ParsePattern(pattern, emptyDomain))
+	}
+
+	logrus.Infof("Committing changes locally...")
+	err = worktree.AddWithOptions(&git.AddOptions{All: true})
+	if err != nil {
+		return stacktrace.Propagate(err, "An error occurred while adding files to the staging area")
 	}
 
 	commitMsg := fmt.Sprintf("Finalize changes for release version '%s'", nextReleaseVersion.String())
@@ -564,4 +580,11 @@ func updateChangelog(changelogFilepath string, releaseVersion string) error {
 	}
 
 	return nil
+}
+
+func isWhiteSpaceOrComment(pattern string) bool {
+	if strings.HasPrefix(pattern, gitIgnoreCommentCharacter) {
+		return true
+	}
+	return strings.TrimSpace(pattern) == ""
 }
