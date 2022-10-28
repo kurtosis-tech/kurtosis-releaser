@@ -45,8 +45,8 @@ const (
 	lastFetchedFileMode                         = 0644
 
 	relChangelogFilepath = "docs/changelog.md"
-	gitIgnoreFileRelPath = ".gitignore"
 
+	gitIgnoreFileRelPath      = ".gitignore"
 	gitIgnoreCommentCharacter = "#"
 
 	expectedNumTBDHeaderLines         = 1
