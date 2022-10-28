@@ -46,7 +46,8 @@ const (
 
 	relChangelogFilepath = "docs/changelog.md"
 
-	gitIgnoreFileRelPath      = ".gitignore"
+	// this is relative to the root of the target repo
+	gitIgnoreRelFilepath      = ".gitignore"
 	gitIgnoreCommentCharacter = "#"
 
 	expectedNumTBDHeaderLines         = 1
@@ -87,6 +88,8 @@ var ReleaseCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE:  run,
 }
+
+var emptyDomain []string = nil
 
 func init() {
 	ReleaseCmd.Flags().BoolVarP(&shouldBumpMajorVersion, "bump-major", bumpMajorFlagShortStr, bumpMajorFlagDefaultVal, "If set, in place of doing version autodetection based on the changelog, the major version (\"X\" in X.Y.Z) will be bumped")
@@ -257,10 +260,12 @@ func run(cmd *cobra.Command, args []string) error {
 		return stacktrace.Propagate(err, "An error occurred while updating the changelog file at '%s'", changelogFilepath)
 	}
 
-	logrus.Infof("Populating exlcudes for the worktree by parsing the .gitignore file")
-	gitIgnoreFile, err := os.Open(gitIgnoreFileRelPath)
+	// we have to manually populate the excludes because of https://github.com/kurtosis-tech/kudet/issues/22
+	// we should remove this piece when the above issue & bigger go-git issue gets resolved
+	logrus.Infof("Populating excludes for the worktree by parsing the .gitignore file")
+	gitIgnoreFile, err := os.Open(gitIgnoreRelFilepath)
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred while reading the '%v' file", gitIgnoreFileRelPath)
+		return stacktrace.Propagate(err, "An error occurred while reading the '%v' file", gitIgnoreRelFilepath)
 	}
 	defer gitIgnoreFile.Close()
 
@@ -272,7 +277,6 @@ func run(cmd *cobra.Command, args []string) error {
 		if isWhiteSpaceOrComment(pattern) {
 			continue
 		}
-		var emptyDomain []string = nil
 		worktree.Excludes = append(worktree.Excludes, gitignore.ParsePattern(pattern, emptyDomain))
 	}
 
