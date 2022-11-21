@@ -60,7 +60,39 @@ func Test_parseChangeLogFileNegativeTest(t *testing.T) {
 
 		
 # 0.1.0
-* Something else`
+* Something else
+# 0.1.1
+- Foo
+`
+
+	outOfPlaceTBD :=
+		` 
+
+# 0.1.1
+## Breaking Changes
+- Something
+# 0.1.0
+# TBD
+`
+
+	tbdAfterValidVersionHeader :=
+		`# TBD
+
+# 0.1.1
+## Breaking Changes
+* Something
+# 0.1.0
+# TBD
+`
+
+	noChangesBetweenTbdAndLastVersion :=
+		`# TBD
+# 0.1.1
+## Breaking Changes
+* Something
+# 0.1.0
+- Bar
+`
 
 	type args struct {
 		changelogFile string
@@ -69,7 +101,6 @@ func Test_parseChangeLogFileNegativeTest(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     args
-		want     bool
 		wantErr  bool
 		errorMsg string
 	}{
@@ -79,7 +110,6 @@ func Test_parseChangeLogFileNegativeTest(t *testing.T) {
 				changelogFile: noVersionFound,
 			},
 			wantErr:  true,
-			want:     false,
 			errorMsg: "No previous release versions were detected in this changelog",
 		},
 		{
@@ -88,8 +118,7 @@ func Test_parseChangeLogFileNegativeTest(t *testing.T) {
 				changelogFile: tbdNotPresent,
 			},
 			wantErr:  true,
-			want:     false,
-			errorMsg: "TBD header not found while reading changelog.md",
+			errorMsg: "TBD header is either missing or is not the first non empty line in changelog.md",
 		},
 		{
 			name: "multipleTBDFound",
@@ -97,7 +126,6 @@ func Test_parseChangeLogFileNegativeTest(t *testing.T) {
 				changelogFile: multipleTBDFound,
 			},
 			wantErr:  true,
-			want:     false,
 			errorMsg: fmt.Sprintf("Found more than %d TBD headers", expectedNumTBDHeaderLines),
 		},
 		{
@@ -106,18 +134,39 @@ func Test_parseChangeLogFileNegativeTest(t *testing.T) {
 				changelogFile: noNewUpdatesForCurrentRelease,
 			},
 			wantErr:  true,
-			want:     false,
+			errorMsg: "changelog.md is empty for the current release",
+		},
+		{
+			name: "outOfPlaceTBD",
+			args: args{
+				changelogFile: outOfPlaceTBD,
+			},
+			wantErr:  true,
+			errorMsg: "TBD header is either missing or is not the first non empty line in changelog.md",
+		},
+		{
+			name: "tbdAfterValidVersionHeader",
+			args: args{
+				changelogFile: tbdAfterValidVersionHeader,
+			},
+			wantErr:  true,
+			errorMsg: fmt.Sprintf("Found more than %d TBD headers", expectedNumTBDHeaderLines),
+		},
+		{
+			name: "noChangesBetweenTbdAndLastVersion",
+			args: args{
+				changelogFile: noChangesBetweenTbdAndLastVersion,
+			},
+			wantErr:  true,
 			errorMsg: "changelog.md is empty for the current release",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseChangeLogFile([]byte(tt.args.changelogFile))
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("parseChangeLogFileNegativeTest() wanted error but received null")
-				}
-				require.ErrorContains(t, err, tt.errorMsg, "parseChangeLogFileNegativeTest() should throw error")
+	for _, changeLogText := range tests {
+		t.Run(changeLogText.name, func(t *testing.T) {
+			_, err := parseChangeLogFile([]byte(changeLogText.args.changelogFile))
+			if changeLogText.wantErr {
+				require.NotNil(t, err)
+				require.ErrorContains(t, err, changeLogText.errorMsg, "parseChangeLogFileNegativeTest() should throw error")
 				return
 			}
 		})

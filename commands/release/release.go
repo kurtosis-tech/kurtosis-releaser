@@ -91,39 +91,43 @@ var ReleaseCmd = &cobra.Command{
 var emptyDomain []string = nil
 
 func parseChangeLogFile(changelogFile []byte) (bool, error) {
-	isBreakingChange := false
-	tbdHeaderFoundCount := 0
-	firstNonEmptyRowNumber := 0
-	lastVersionReleaseRowNumber := 0
-
 	numOfRow := 1
+	tbdHeaderFound := false
+	isBreakingChange := false
+	nonEmptyLineFoundRowNumber := 0
+	versionHeaderFoundRowNumber := 0
+
 	scanner := bufio.NewScanner(bytes.NewReader(changelogFile))
 
 	for scanner.Scan() {
-		if versionToBeReleasedPlaceholderHeaderRegex.Match(scanner.Bytes()) {
-			tbdHeaderFoundCount = 1
+		// Check if TBD is the first non-empty line - this is for extra caution.
+		if !emptyLineRegex.Match(scanner.Bytes()) {
+			if !versionToBeReleasedPlaceholderHeaderRegex.Match(scanner.Bytes()) {
+				return false, stacktrace.NewError("TBD header is either missing or is not the first non empty line in changelog.md")
+			}
+			tbdHeaderFound = true
 			break
 		}
 		numOfRow = numOfRow + 1
 	}
 
-	// No TBD header was found
-	if tbdHeaderFoundCount != expectedNumTBDHeaderLines {
-		return isBreakingChange, stacktrace.NewError("TBD header not found while reading changelog.md")
+	// No TBD header was found because the file is empty.
+	if !tbdHeaderFound {
+		return false, stacktrace.NewError("Empty changelog file, please check the filepath again.")
 	}
 
 	for scanner.Scan() {
 		if versionToBeReleasedPlaceholderHeaderRegex.Match(scanner.Bytes()) {
-			return isBreakingChange, stacktrace.NewError("Found more than %d TBD headers, there can only be #d TBD header in the changelog", expectedNumTBDHeaderLines)
+			return false, stacktrace.NewError("Found more than %d TBD headers, there can only be #d TBD header in the changelog", expectedNumTBDHeaderLines)
 		}
 
 		// Scan file until next version header detected, searching for first not empty line along the way
-		if lastVersionReleaseRowNumber > 0 && firstNonEmptyRowNumber > 0 {
-			break
+		if versionHeaderRegex.Match(scanner.Bytes()) && versionHeaderFoundRowNumber == 0 {
+			versionHeaderFoundRowNumber = numOfRow
 		}
 
-		if !emptyLineRegex.Match(scanner.Bytes()) && firstNonEmptyRowNumber == 0 {
-			firstNonEmptyRowNumber = numOfRow
+		if !emptyLineRegex.Match(scanner.Bytes()) && nonEmptyLineFoundRowNumber == 0 {
+			nonEmptyLineFoundRowNumber = numOfRow
 		}
 
 		// there exist breaking change header between TBD and last released version
@@ -131,24 +135,20 @@ func parseChangeLogFile(changelogFile []byte) (bool, error) {
 			isBreakingChange = true
 		}
 
-		if versionHeaderRegex.Match(scanner.Bytes()) && lastVersionReleaseRowNumber == 0 {
-			lastVersionReleaseRowNumber = numOfRow
-		}
-
 		numOfRow = numOfRow + 1
 	}
 
 	if err := scanner.Err(); err != nil {
-		return isBreakingChange, stacktrace.Propagate(err, "An error occurred while scanning the bytes of the changelog file.")
+		return false, stacktrace.Propagate(err, "An error occurred while scanning the bytes of the changelog file.")
 	}
 
-	if lastVersionReleaseRowNumber == 0 {
-		return isBreakingChange, stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
+	if versionHeaderFoundRowNumber == 0 {
+		return false, stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
 	}
 
 	// if first non-empty line after TBD is the version line, it means that changelog.md is empty for upcoming release.
-	if firstNonEmptyRowNumber == lastVersionReleaseRowNumber {
-		return isBreakingChange, stacktrace.NewError("changelog.md is empty for the current release, please check if the changes are merged and changelog.md is updated correctly.")
+	if versionHeaderFoundRowNumber <= nonEmptyLineFoundRowNumber {
+		return false, stacktrace.NewError("changelog.md is empty for the current release, please check if the changes are merged and changelog.md is updated correctly.")
 	}
 
 	return isBreakingChange, nil
