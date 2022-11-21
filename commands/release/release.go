@@ -11,7 +11,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
-	"github.com/kurtosis-tech/kudet/commands_shared_code/file_line_matcher"
 	"github.com/kurtosis-tech/stacktrace"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -70,8 +69,8 @@ var (
 	versionToBeReleasedPlaceholderHeaderRegex    = regexp.MustCompile(versionToBeReleasedPlaceholderHeaderRegexStr)
 	versionHeaderRegex                           = regexp.MustCompile(versionHeaderRegexStr)
 	breakingChangesRegex                         = regexp.MustCompile(breakingChangesSubheaderRegexStr)
-
-	shouldWarnAboutUndoingRemotePushMessage = `ACTION REQUIRED: An error occurred meaning we need to undo our push to '%s', but this is a dangerous operation for its risk that it will destroy history on the remote so you'll need to do this manually. 
+	emptyLineRegex                               = regexp.MustCompile("^\\s*$")
+	shouldWarnAboutUndoingRemotePushMessage      = `ACTION REQUIRED: An error occurred meaning we need to undo our push to '%s', but this is a dangerous operation for its risk that it will destroy history on the remote so you'll need to do this manually.
 	Follow these instructions to properly undo this push:
 	1. Run a git fetch to pull down the latest changes from origin master
 	2. Verify that the origin master hasn't had any new commits that would get blown away if we reverted it
@@ -90,6 +89,70 @@ var ReleaseCmd = &cobra.Command{
 }
 
 var emptyDomain []string = nil
+
+func parseChangeLogFile(changelogFile []byte) (bool, error) {
+	isBreakingChange := false
+	tbdHeaderFoundCount := 0
+	firstNonEmptyRowNumber := 0
+	lastVersionReleaseRowNumber := 0
+
+	numOfRow := 1
+	scanner := bufio.NewScanner(bytes.NewReader(changelogFile))
+
+	for scanner.Scan() {
+		if versionToBeReleasedPlaceholderHeaderRegex.Match(scanner.Bytes()) {
+			tbdHeaderFoundCount = 1
+			break
+		}
+		numOfRow = numOfRow + 1
+	}
+
+	// No TBD header was found
+	if tbdHeaderFoundCount != expectedNumTBDHeaderLines {
+		return isBreakingChange, stacktrace.NewError("TBD header not found while reading changelog.md")
+	}
+
+	for scanner.Scan() {
+		if versionToBeReleasedPlaceholderHeaderRegex.Match(scanner.Bytes()) {
+			return isBreakingChange, stacktrace.NewError("Found more than %d TBD headers, there can only be #d TBD header in the changelog", expectedNumTBDHeaderLines)
+		}
+
+		// Scan file until next version header detected, searching for first not empty line along the way
+		if lastVersionReleaseRowNumber > 0 && firstNonEmptyRowNumber > 0 {
+			break
+		}
+
+		if !emptyLineRegex.Match(scanner.Bytes()) && firstNonEmptyRowNumber == 0 {
+			firstNonEmptyRowNumber = numOfRow
+		}
+
+		// there exist breaking change header between TBD and last released version
+		if breakingChangesRegex.Match(scanner.Bytes()) {
+			isBreakingChange = true
+		}
+
+		if versionHeaderRegex.Match(scanner.Bytes()) && lastVersionReleaseRowNumber == 0 {
+			lastVersionReleaseRowNumber = numOfRow
+		}
+
+		numOfRow = numOfRow + 1
+	}
+
+	if err := scanner.Err(); err != nil {
+		return isBreakingChange, stacktrace.Propagate(err, "An error occurred while scanning the bytes of the changelog file.")
+	}
+
+	if lastVersionReleaseRowNumber == 0 {
+		return isBreakingChange, stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
+	}
+
+	// if first non-empty line after TBD is the version line, it means that changelog.md is empty for upcoming release.
+	if firstNonEmptyRowNumber == lastVersionReleaseRowNumber {
+		return isBreakingChange, stacktrace.NewError("changelog.md is empty for the current release, please check if the changes are merged and changelog.md is updated correctly.")
+	}
+
+	return isBreakingChange, nil
+}
 
 func init() {
 	ReleaseCmd.Flags().BoolVarP(&shouldBumpMajorVersion, "bump-major", bumpMajorFlagShortStr, bumpMajorFlagDefaultVal, "If set, in place of doing version autodetection based on the changelog, the major version (\"X\" in X.Y.Z) will be bumped")
@@ -193,22 +256,19 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Conduct changelog file validation
-	matcher := file_line_matcher.FileLineMatcher{}
 	changelogFilepath := path.Join(currentWorkingDirpath, relChangelogFilepath)
-	tbdHeaderCount, err := matcher.MatchNumLines(changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex)
+	changelogFile, err := os.ReadFile(changelogFilepath)
+
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, versionToBeReleasedPlaceholderHeaderRegex.String())
+		return stacktrace.Propagate(err, "An error occurred attempting to read changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
 	}
-	if tbdHeaderCount != expectedNumTBDHeaderLines {
-		return stacktrace.NewError("There should be %d TBD header lines in the changelog. Instead there are %d.", expectedNumTBDHeaderLines, tbdHeaderCount)
-	}
-	versionHeaderCount, err := matcher.MatchNumLines(changelogFilepath, versionHeaderRegex)
+
+	hasBreakingChange, err := parseChangeLogFile(changelogFile)
+
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred attempting to read the number of lines in '%s' matching the following regex '%s'", changelogFilepath, versionHeaderRegex.String())
+		return err
 	}
-	if versionHeaderCount == 0 {
-		return stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
-	}
+
 	logrus.Infof("Finished prererelease checks.")
 
 	logrus.Infof("Guessing next release version...")
@@ -220,11 +280,7 @@ func run(cmd *cobra.Command, args []string) error {
 	if shouldBumpMajorVersion {
 		nextReleaseVersion = latestReleaseVersion.IncMajor()
 	} else {
-		hasBreakingChanges, err := doBreakingChangesExist(changelogFilepath)
-		if err != nil {
-			return stacktrace.Propagate(err, "An error occurred while detecting if breaking changes exist in the changelog at '%s'", changelogFilepath)
-		}
-		if hasBreakingChanges {
+		if hasBreakingChange {
 			nextReleaseVersion = latestReleaseVersion.IncMinor()
 		} else {
 			nextReleaseVersion = latestReleaseVersion.IncPatch()
@@ -465,46 +521,6 @@ func getLatestReleaseVersion(repo *git.Repository) (*semver.Version, error) {
 	}
 
 	return latestReleaseTagSemVer, nil
-}
-
-func doBreakingChangesExist(changelogFilepath string) (bool, error) {
-	changelogFile, err := os.ReadFile(changelogFilepath)
-	if err != nil {
-		return false, stacktrace.Propagate(err, "An error occurred attempting to read changelog file at provided path. Are you sure '%s' exists?", changelogFilepath)
-	}
-	foundBreakingChanges, err := doBreakingChangesExistHelper(changelogFile)
-	if err != nil {
-		// Bubble up the stacktrace err
-		return false, err
-	}
-	return foundBreakingChanges, nil
-}
-
-func doBreakingChangesExistHelper(changelogFile []byte) (bool, error) {
-	scanner := bufio.NewScanner(bytes.NewReader(changelogFile))
-	// Find TBD header
-	for scanner.Scan() {
-		if versionToBeReleasedPlaceholderHeaderRegex.Match(scanner.Bytes()) {
-			break
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return false, stacktrace.Propagate(err, "An error occurred while scanning the bytes of the changelog file for the '%s' header.", versionToBeReleasedPlaceholderStr)
-	}
-	// Scan file until next version header detected, searching for Breaking Changes header along the way
-	foundBreakingChanges := false
-	for scanner.Scan() {
-		if breakingChangesRegex.Match(scanner.Bytes()) {
-			foundBreakingChanges = true
-		}
-		if versionHeaderRegex.Match(scanner.Bytes()) {
-			break
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return false, stacktrace.Propagate(err, "An error occurred while scanning the bytes of the changelog file for the Breaking Changes Subheader.")
-	}
-	return foundBreakingChanges, nil
 }
 
 func runPreReleaseScripts(preReleaseScriptsDirpath string, releaseVersion string) error {
