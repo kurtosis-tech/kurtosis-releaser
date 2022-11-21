@@ -133,7 +133,7 @@ func TestDoBreakingChangesExistIfChangelogIsValid(t *testing.T) {
 * Something`
 
 	onlyOneVersionWithSpaces :=
-		`#TBD
+		`# TBD
 * Something
 
 # 0.1.0
