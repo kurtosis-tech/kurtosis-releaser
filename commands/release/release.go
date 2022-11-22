@@ -91,12 +91,11 @@ var ReleaseCmd = &cobra.Command{
 var emptyDomain []string = nil
 
 func parseChangeLogFile(changelogFile []byte) (bool, error) {
-	numOfRow := 1
 	tbdHeaderFound := false
 	isBreakingChange := false
-	nonEmptyLineFoundRowNumber := 0
-	versionHeaderFoundRowNumber := 0
 
+	versionHeaderBool := false
+	nonEmptyLineFoundBool := false
 	scanner := bufio.NewScanner(bytes.NewReader(changelogFile))
 
 	for scanner.Scan() {
@@ -108,7 +107,6 @@ func parseChangeLogFile(changelogFile []byte) (bool, error) {
 			tbdHeaderFound = true
 			break
 		}
-		numOfRow = numOfRow + 1
 	}
 
 	// No TBD header was found because the file is empty.
@@ -122,32 +120,31 @@ func parseChangeLogFile(changelogFile []byte) (bool, error) {
 		}
 
 		// Scan file until next version header detected, searching for first not empty line along the way
-		if versionHeaderRegex.Match(scanner.Bytes()) && versionHeaderFoundRowNumber == 0 {
-			versionHeaderFoundRowNumber = numOfRow
+		if versionHeaderRegex.Match(scanner.Bytes()) {
+			versionHeaderBool = true
+			break
 		}
 
-		if !emptyLineRegex.Match(scanner.Bytes()) && nonEmptyLineFoundRowNumber == 0 {
-			nonEmptyLineFoundRowNumber = numOfRow
+		if !emptyLineRegex.Match(scanner.Bytes()) {
+			nonEmptyLineFoundBool = true
 		}
 
 		// there exist breaking change header between TBD and last released version
 		if breakingChangesRegex.Match(scanner.Bytes()) {
 			isBreakingChange = true
 		}
-
-		numOfRow = numOfRow + 1
 	}
 
 	if err := scanner.Err(); err != nil {
 		return false, stacktrace.Propagate(err, "An error occurred while scanning the bytes of the changelog file.")
 	}
 
-	if versionHeaderFoundRowNumber == 0 {
+	if !versionHeaderBool {
 		return false, stacktrace.NewError("No previous release versions were detected in this changelog. Are you sure that the changelog is in sync with the release tags on this branch?")
 	}
 
 	// if first non-empty line after TBD is the version line, it means that changelog.md is empty for upcoming release.
-	if versionHeaderFoundRowNumber <= nonEmptyLineFoundRowNumber {
+	if !nonEmptyLineFoundBool {
 		return false, stacktrace.NewError("changelog.md is empty for the current release, please check if the changes are merged and changelog.md is updated correctly.")
 	}
 

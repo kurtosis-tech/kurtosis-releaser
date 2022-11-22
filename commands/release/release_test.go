@@ -75,16 +75,6 @@ func Test_parseChangeLogFileNegativeTest(t *testing.T) {
 # TBD
 `
 
-	tbdAfterValidVersionHeader :=
-		`# TBD
-
-# 0.1.1
-## Breaking Changes
-* Something
-# 0.1.0
-# TBD
-`
-
 	noChangesBetweenTbdAndLastVersion :=
 		`# TBD
 # 0.1.1
@@ -145,14 +135,6 @@ func Test_parseChangeLogFileNegativeTest(t *testing.T) {
 			errorMsg: "TBD header is either missing or is not the first non empty line in changelog.md",
 		},
 		{
-			name: "tbdAfterValidVersionHeader",
-			args: args{
-				changelogFile: tbdAfterValidVersionHeader,
-			},
-			wantErr:  true,
-			errorMsg: fmt.Sprintf("Found more than %d TBD headers", expectedNumTBDHeaderLines),
-		},
-		{
 			name: "noChangesBetweenTbdAndLastVersion",
 			args: args{
 				changelogFile: noChangesBetweenTbdAndLastVersion,
@@ -179,7 +161,7 @@ func TestDoBreakingChangesExistIfChangelogIsValid(t *testing.T) {
 * Something
 
 #0.1.0
-* Something`
+## Breaking Changes`
 
 	onlyOneVersionWithSpaces :=
 		`# TBD
@@ -239,7 +221,7 @@ func TestDoBreakingChangesExistIfChangelogIsValid(t *testing.T) {
 * Something else
 
 #0.1.0
-* Something`
+### Breaking Changes`
 
 	lowercaseBreakingChanges :=
 		`# TBD
