@@ -1,6 +1,7 @@
 package release
 
 import (
+	"fmt"
 	"regexp"
 	"testing"
 
@@ -35,18 +36,132 @@ func TestBreakingChangesSubheaderRegex(t *testing.T) {
 	testRegexPattern(t, "Breaking Changes Subheader", breakingChangesSubheaderRegexStr, validStrings, invalidStrings)
 }
 
-func TestDoBreakingChangesExist(t *testing.T) {
-	noVersion :=
-		`# TBD
+func Test_parseChangeLogFileNegativeTest(t *testing.T) {
+
+	// test inputs
+	noVersionFound :=
+		`#TBD
 * Something
 * Something else`
 
+	tbdNotPresent :=
+		`
+* Something
+* Something else`
+
+	multipleTBDFound :=
+		`# TBD
+* Something
+# TBD
+* Something else`
+
+	noNewUpdatesForCurrentRelease :=
+		`# TBD
+
+		
+# 0.1.0
+* Something else
+# 0.1.1
+- Foo
+`
+
+	outOfPlaceTBD :=
+		` 
+
+# 0.1.1
+## Breaking Changes
+- Something
+# 0.1.0
+# TBD
+`
+
+	noChangesBetweenTbdAndLastVersion :=
+		`# TBD
+# 0.1.1
+## Breaking Changes
+* Something
+# 0.1.0
+- Bar
+`
+
+	type args struct {
+		changelogFile string
+	}
+
+	tests := []struct {
+		name     string
+		args     args
+		wantErr  bool
+		errorMsg string
+	}{
+		{
+			name: "noVersionFound",
+			args: args{
+				changelogFile: noVersionFound,
+			},
+			wantErr:  true,
+			errorMsg: "No previous release versions were detected in this changelog",
+		},
+		{
+			name: "tbdNotPresent",
+			args: args{
+				changelogFile: tbdNotPresent,
+			},
+			wantErr:  true,
+			errorMsg: "TBD header is either missing or is not the first non empty line in changelog.md",
+		},
+		{
+			name: "multipleTBDFound",
+			args: args{
+				changelogFile: multipleTBDFound,
+			},
+			wantErr:  true,
+			errorMsg: fmt.Sprintf("Found more than %d TBD headers", expectedNumTBDHeaderLines),
+		},
+		{
+			name: "noNewUpdatesForCurrentRelease",
+			args: args{
+				changelogFile: noNewUpdatesForCurrentRelease,
+			},
+			wantErr:  true,
+			errorMsg: "changelog.md is empty for the current release",
+		},
+		{
+			name: "outOfPlaceTBD",
+			args: args{
+				changelogFile: outOfPlaceTBD,
+			},
+			wantErr:  true,
+			errorMsg: "TBD header is either missing or is not the first non empty line in changelog.md",
+		},
+		{
+			name: "noChangesBetweenTbdAndLastVersion",
+			args: args{
+				changelogFile: noChangesBetweenTbdAndLastVersion,
+			},
+			wantErr:  true,
+			errorMsg: "changelog.md is empty for the current release",
+		},
+	}
+	for _, changeLogText := range tests {
+		t.Run(changeLogText.name, func(t *testing.T) {
+			_, err := parseChangeLogFile([]byte(changeLogText.args.changelogFile))
+			if changeLogText.wantErr {
+				require.NotNil(t, err)
+				require.ErrorContains(t, err, changeLogText.errorMsg, "parseChangeLogFileNegativeTest() should throw error")
+				return
+			}
+		})
+	}
+}
+
+func TestDoBreakingChangesExistIfChangelogIsValid(t *testing.T) {
 	onlyOneVersion :=
 		`#TBD
 * Something
 
 #0.1.0
-* Something`
+## Breaking Changes`
 
 	onlyOneVersionWithSpaces :=
 		`# TBD
@@ -106,7 +221,7 @@ func TestDoBreakingChangesExist(t *testing.T) {
 * Something else
 
 #0.1.0
-* Something`
+### Breaking Changes`
 
 	lowercaseBreakingChanges :=
 		`# TBD
@@ -117,8 +232,7 @@ func TestDoBreakingChangesExist(t *testing.T) {
 * Something`
 
 	shouldHaveBreakingChanges := []string{onlyOneVersionTwoHashBreakingChanges, onlyOneVersionThreeHashBreakingChanges, onlyOneVersionFourHashBreakingChanges, multipleVersionsBreakingChanges, lowercaseBreakingChanges}
-	shouldNotHaveBreakingChanges := []string{noVersion, onlyOneVersion, onlyOneVersionWithSpaces, multipleVersions}
-
+	shouldNotHaveBreakingChanges := []string{onlyOneVersion, onlyOneVersionWithSpaces, multipleVersions}
 	testBreakingChangesExists(t, shouldHaveBreakingChanges, shouldNotHaveBreakingChanges)
 }
 
@@ -170,16 +284,14 @@ func testRegexPattern(t *testing.T, regexPatternName string, regexPatternStr str
 
 func testBreakingChangesExists(t *testing.T, validStrings []string, invalidStrings []string) {
 	for _, str := range validStrings {
-		hasBreakingChanges, err := doBreakingChangesExistHelper([]byte(str))
+		hasBreakingChanges, err := parseChangeLogFile([]byte(str))
 		require.NoError(t, err, "An error occurred testing if breaking changes existed.")
-
 		require.True(t, hasBreakingChanges, "Breaking Changes were not detected in this string when it should have been:\n%s", str)
 	}
 
 	for _, str := range invalidStrings {
-		hasBreakingChanges, err := doBreakingChangesExistHelper([]byte(str))
+		hasBreakingChanges, err := parseChangeLogFile([]byte(str))
 		require.NoError(t, err, "An error occurred testing if breaking changes existed.")
-
 		require.False(t, hasBreakingChanges, "Breaking Changes were detected in this string when it should not have been:\n%s", str)
 	}
 }

@@ -2,6 +2,7 @@
 
 ### Fixes
 * Removes the empty 'api/' folder now that kudet is fixed
+* Fail the release if changelog is not updated since last release
 
 ### Features
 * Made `kudet` independent of what gets changed in target repos again, by manually populating the `.gitignore`
