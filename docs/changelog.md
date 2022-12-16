@@ -1,5 +1,7 @@
 # TBD
 
+# 0.1.10
+
 ### Fixes
 * Removes the empty 'api/' folder now that kudet is fixed
 * Fail the release if changelog is not updated since last release
