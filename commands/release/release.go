@@ -27,7 +27,7 @@ import (
 const (
 	gitDirname       = ".git"
 	originRemoteName = "origin"
-	masterBranchName = "master"
+	mainBranchName   = "main"
 
 	preReleaseScriptsFilename = ".pre-release-scripts.txt"
 
@@ -72,10 +72,10 @@ var (
 	emptyLineRegex                               = regexp.MustCompile("^\\s*$")
 	shouldWarnAboutUndoingRemotePushMessage      = `ACTION REQUIRED: An error occurred meaning we need to undo our push to '%s', but this is a dangerous operation for its risk that it will destroy history on the remote so you'll need to do this manually.
 	Follow these instructions to properly undo this push:
-	1. Run a git fetch to pull down the latest changes from origin master
-	2. Verify that the origin master hasn't had any new commits that would get blown away if we reverted it
+	1. Run a git fetch to pull down the latest changes from origin main
+	2. Verify that the origin main hasn't had any new commits that would get blown away if we reverted it
 	3. Ensure that the local branch has cleaned up correctly. Specifically, that it has no leftover changes from running the releaser and is on the correct commit.
-	3. Do a 'git push -f %s %s' from local master to remote master
+	3. Do a 'git push -f %s %s' from local main to remote main
 	`
 )
 
@@ -83,7 +83,7 @@ var shouldBumpMajorVersion bool
 var ReleaseCmd = &cobra.Command{
 	Use:   releaseCmdStr,
 	Short: "Cuts a new release on the repo",
-	Long:  "Cuts a new release on a Kurtosis Repo. This command is intended to be ran in a Github action and requires a release token to authenticate pushes to master.",
+	Long:  "Cuts a new release on a Kurtosis Repo. This command is intended to be ran in a Github action and requires a release token to authenticate pushes to main.",
 	Args:  cobra.ExactArgs(1),
 	RunE:  run,
 }
@@ -228,28 +228,28 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	logrus.Infof("Checking that %s and %s are in sync...", masterBranchName, originRemoteName)
-	// Check that local master and remote master are in sync
-	localMasterBranchName := masterBranchName
-	remoteMasterBranchName := fmt.Sprintf("%v/%v", originRemoteName, masterBranchName)
-	localMasterHash, err := repository.ResolveRevision(plumbing.Revision(localMasterBranchName))
+	logrus.Infof("Checking that %s and %s are in sync...", mainBranchName, originRemoteName)
+	// Check that local main and remote main are in sync
+	localMainBranchName := mainBranchName
+	remoteMainBranchName := fmt.Sprintf("%v/%v", originRemoteName, mainBranchName)
+	localMainHash, err := repository.ResolveRevision(plumbing.Revision(localMainBranchName))
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMasterBranchName)
+		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", localMainBranchName)
 	}
-	remoteMasterHash, err := repository.ResolveRevision(plumbing.Revision(remoteMasterBranchName))
+	remoteMainHash, err := repository.ResolveRevision(plumbing.Revision(remoteMainBranchName))
 	if err != nil {
-		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", remoteMasterBranchName)
+		return stacktrace.Propagate(err, "An error occurred parsing revision '%v'", remoteMainBranchName)
 	}
-	isLocalMasterInSyncWithRemoteMaster := localMasterHash.String() == remoteMasterHash.String()
-	if !isLocalMasterInSyncWithRemoteMaster {
-		return stacktrace.NewError("The local '%s' branch is not in sync with the '%s' '%s' branch. Must be in sync to conduct release process.", masterBranchName, originRemoteName, masterBranchName)
+	isLocalMainInSyncWithRemoteMain := localMainHash.String() == remoteMainHash.String()
+	if !isLocalMainInSyncWithRemoteMain {
+		return stacktrace.NewError("The local '%s' branch is not in sync with the '%s' '%s' branch. Must be in sync to conduct release process.", mainBranchName, originRemoteName, mainBranchName)
 	}
 
-	logrus.Infof("Checking out %s branch...", masterBranchName)
-	masterBranchRef := plumbing.ReferenceName(fmt.Sprintf("%s%s", headRef, masterBranchName))
-	err = worktree.Checkout(&git.CheckoutOptions{Branch: masterBranchRef})
+	logrus.Infof("Checking out %s branch...", mainBranchName)
+	mainBranchRef := plumbing.ReferenceName(fmt.Sprintf("%s%s", headRef, mainBranchName))
+	err = worktree.Checkout(&git.CheckoutOptions{Branch: mainBranchRef})
 	if err != nil {
-		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", masterBranchName, masterBranchName)
+		return stacktrace.Propagate(err, "Missing required '%v' branch locally. Please run 'git checkout %v'", mainBranchName, mainBranchName)
 	}
 
 	// Conduct changelog file validation
@@ -293,10 +293,10 @@ func run(cmd *cobra.Command, args []string) error {
 	shouldResetLocalBranch := true
 	defer func() {
 		if shouldResetLocalBranch {
-			// git reset --hard origin/master
-			err = worktree.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: *remoteMasterHash})
+			// git reset --hard origin/main
+			err = worktree.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: *remoteMainHash})
 			if err != nil {
-				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo local changes made for release '%s'. Please run 'git reset --hard %s' to undo manually.", nextReleaseVersion.String(), remoteMasterBranchName)
+				logrus.Errorf("ACTION REQUIRED: Error occurred attempting to undo local changes made for release '%s'. Please run 'git reset --hard %s' to undo manually.", nextReleaseVersion.String(), remoteMainBranchName)
 			}
 		}
 	}()
@@ -400,7 +400,7 @@ func run(cmd *cobra.Command, args []string) error {
 		Auth:       gitAuth,
 	}
 	if err = repository.Push(pushVPrefixedReleaseTagOpts); err != nil {
-		logrus.Errorf("An error occurred while pushing release tag: '%s' to '%s'.", vReleaseTag, remoteMasterBranchName)
+		logrus.Errorf("An error occurred while pushing release tag: '%s' to '%s'.", vReleaseTag, remoteMainBranchName)
 	}
 	shouldDeleteRemoteVPrefixedReleaseTag := true
 	defer func() {
@@ -419,19 +419,19 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	logrus.Infof("Pushing release changes to '%s'...", remoteMasterBranchName)
+	logrus.Infof("Pushing release changes to '%s'...", remoteMainBranchName)
 	pushCommitOpts := &git.PushOptions{RemoteName: originRemoteName, Auth: gitAuth}
 	if err = repository.Push(pushCommitOpts); err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s'", remoteMasterBranchName)
+		return stacktrace.Propagate(err, "An error occurred while pushing release changes to '%s'", remoteMainBranchName)
 	}
 	shouldWarnAboutUndoingRemotePush := true
 	defer func() {
 		if shouldWarnAboutUndoingRemotePush {
-			logrus.Errorf(shouldWarnAboutUndoingRemotePushMessage, originRemoteName, originRemoteName, masterBranchName, err)
+			logrus.Errorf(shouldWarnAboutUndoingRemotePushMessage, originRemoteName, originRemoteName, mainBranchName, err)
 		}
 	}()
 
-	logrus.Infof("Pushing release tags to '%s'...", remoteMasterBranchName)
+	logrus.Infof("Pushing release tags to '%s'...", remoteMainBranchName)
 	releaseTagRefSpec := fmt.Sprintf("refs/tags/%s:refs/tags/%s", releaseTag, releaseTag)
 	pushReleaseTagOpts := &git.PushOptions{
 		RemoteName: originRemoteName,
@@ -439,7 +439,7 @@ func run(cmd *cobra.Command, args []string) error {
 		Auth:       gitAuth,
 	}
 	if err = repository.Push(pushReleaseTagOpts); err != nil {
-		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'", releaseTag, remoteMasterBranchName)
+		return stacktrace.Propagate(err, "An error occurred while pushing release tag: '%s' to '%s'", releaseTag, remoteMainBranchName)
 	}
 
 	shouldResetLocalBranch = false
