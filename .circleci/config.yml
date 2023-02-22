@@ -99,14 +99,14 @@ workflows:
           filters:
             branches:
               ignore:
-                - master
+                - main
       - build_kudet:
           context:
             - github-user
           filters:
             branches:
               ignore:
-                - master
+                - main
       - push_kudet_artifacts:
           context:
             - github-user
