@@ -1,4 +1,13 @@
-# 0.1.10
+# Changelog
+
+## [0.1.11](https://github.com/kurtosis-tech/kudet/compare/0.1.10...0.1.11) (2023-02-24)
+
+
+### Bug Fixes
+
+* remove dist directory ([#32](https://github.com/kurtosis-tech/kudet/issues/32)) ([1ad5960](https://github.com/kurtosis-tech/kudet/commit/1ad596085d12accff89d054d82d74e3c39efed55))
+
+## 0.1.10
 
 ### Fixes
 * Removes the empty 'api/' folder now that kudet is fixed
@@ -7,19 +16,19 @@
 ### Features
 * Made `kudet` independent of what gets changed in target repos again, by manually populating the `.gitignore`
 
-# 0.1.9
+## 0.1.9
 
 ### Fixes
 * Adds the package.json changed by the minimal GRPC server during pre-release to staging area
 * Fixes a bug where we try to add a file which doesn't exist that breaks the releae process
 * Adds an 'api/' empty folder to unblock broken kudet release script  
 
-# 0.1.8
+## 0.1.8
 
 ### Fixes
 * Fixes how we add files during a release, using a white list of files
 
-# 0.1.7
+## 0.1.7
 
 ### Changes
 * Migrate repo to use new release workflow
@@ -28,23 +37,23 @@
 ### Fixes
 * Fix `invalidDockerImgCharsRegex` in `get-docker-tag`
 
-# 0.1.6
+## 0.1.6
 * Add flag to bump major version for release command
 
-# 0.1.5
+## 0.1.5
 * Require authentication through personal access token for release command
 
-# 0.1.4
+## 0.1.4
 * Update goreleaser config to latest version of goreleaser
 
-# 0.1.3
+## 0.1.3
 * Fix goreleaser config by changing from bin.install kurtosis -> bin.install kudet
 
-# 0.1.2
+## 0.1.2
 * Update circle ci configuration to not push artifacts on PR branches
 
-# 0.1.1
+## 0.1.1
 * Add necessary versioning tools
 
-# 0.1.0
+## 0.1.0
 * Initial commit
